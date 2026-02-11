@@ -3,6 +3,7 @@ import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import Container from "@/components/Container";
 import { formatKrw } from "@/lib/format";
+import WishlistButton from "@/components/WishlistButton";
 
 type Props = { params: Promise<{ id: string }> };
 
@@ -18,9 +19,12 @@ export default async function ProductDetailPage({ params }: Props) {
     },
   });
 
-  if (!product) notFound();
+  if (!product || product.isDeleted) notFound();
 
   const shopName = product.seller.sellerProfile?.shopName ?? "알수없음";
+  const stock = product.variants[0]?.stock ?? 0;
+  const isSoldOut = stock <= 0;
+  const isDisabled = isSoldOut || !product.isActive;
 
   return (
     <Container>
@@ -66,6 +70,13 @@ export default async function ProductDetailPage({ params }: Props) {
           {formatKrw(product.priceKrw)}
         </p>
 
+        {/* Sold out badge */}
+        {isSoldOut && (
+          <span className="mt-3 inline-block px-3 py-1.5 rounded-full bg-red-500 text-white text-[13px] font-bold">
+            품절
+          </span>
+        )}
+
         {/* Variants */}
         {product.variants.length > 0 && (
           <div className="mt-4 flex flex-wrap gap-2">
@@ -91,19 +102,13 @@ export default async function ProductDetailPage({ params }: Props) {
 
         {/* CTA placeholders */}
         <div className="mt-8 flex gap-3">
-          <button className="flex-1 h-[52px] bg-black text-white rounded-xl text-[16px] font-bold active:bg-gray-800 transition-colors">
-            구매하기
+          <button
+            className="flex-1 h-[52px] bg-black text-white rounded-xl text-[16px] font-bold active:bg-gray-800 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
+            disabled={isDisabled}
+          >
+            {isSoldOut ? "품절" : "구매하기"}
           </button>
-          <button className="w-[52px] h-[52px] border border-gray-200 rounded-xl flex items-center justify-center active:bg-gray-50 transition-colors">
-            <svg className="w-6 h-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={1.5}
-                d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"
-              />
-            </svg>
-          </button>
+          <WishlistButton productId={product.id} variant="detail" />
         </div>
       </div>
     </Container>

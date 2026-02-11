@@ -18,7 +18,7 @@ export default async function SellerShopPage({ params }: Props) {
   const profile = seller.sellerProfile;
 
   const products = await prisma.product.findMany({
-    where: { sellerId, status: "ACTIVE", isActive: true },
+    where: { sellerId, status: "ACTIVE", isActive: true, isDeleted: false },
     orderBy: { createdAt: "desc" },
     include: {
       images: { orderBy: { sortOrder: "asc" }, take: 1 },

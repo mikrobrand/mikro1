@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { formatKrw } from "@/lib/format";
 import ToggleActiveButton from "@/components/ToggleActiveButton";
+import WishlistButton from "@/components/WishlistButton";
 
 type ProductCardProps = {
   id: string;
@@ -12,6 +13,8 @@ type ProductCardProps = {
   /** Seller dashboard mode – show badge + actions */
   sellerMode?: boolean;
   isActive?: boolean;
+  isDeleted?: boolean;
+  stock?: number;
 };
 
 export default function ProductCard({
@@ -23,9 +26,34 @@ export default function ProductCard({
   sellerId,
   sellerMode,
   isActive,
+  isDeleted,
+  stock,
 }: ProductCardProps) {
+  const isSoldOut = (stock ?? 0) <= 0;
+
+  // Determine status badge for seller mode
+  let badgeLabel = "";
+  let badgeClass = "";
+  if (sellerMode) {
+    if (isDeleted) {
+      badgeLabel = "삭제됨";
+      badgeClass = "bg-red-500 text-white";
+    } else if (isSoldOut) {
+      badgeLabel = "품절";
+      badgeClass = "bg-orange-500 text-white";
+    } else if (isActive) {
+      badgeLabel = "판매중";
+      badgeClass = "bg-green-500 text-white";
+    } else {
+      badgeLabel = "숨김";
+      badgeClass = "bg-gray-500 text-white";
+    }
+  }
+
+  const dimmed = sellerMode && (isDeleted || !isActive || isSoldOut);
+
   return (
-    <article className={`bg-white ${sellerMode && !isActive ? "opacity-60" : ""}`}>
+    <article className={`bg-white ${dimmed ? "opacity-60" : ""}`}>
       {/* Product image - big like 무신사 */}
       <Link href={`/p/${id}`} className="block">
         <div className="relative w-full aspect-[3/4] bg-gray-100 overflow-hidden rounded-lg">
@@ -42,17 +70,14 @@ export default function ProductCard({
           )}
 
           {/* Status badge – seller mode only */}
-          {sellerMode && (
-            <span
-              className={`absolute top-2 left-2 px-2.5 py-1 rounded-lg text-[11px] font-bold ${
-                isActive
-                  ? "bg-green-500 text-white"
-                  : "bg-gray-500 text-white"
-              }`}
-            >
-              {isActive ? "판매중" : "숨김"}
+          {sellerMode && badgeLabel && (
+            <span className={`absolute top-2 left-2 px-2.5 py-1 rounded-lg text-[11px] font-bold ${badgeClass}`}>
+              {badgeLabel}
             </span>
           )}
+
+          {/* Wishlist heart – customer mode only */}
+          {!sellerMode && <WishlistButton productId={id} variant="card" />}
         </div>
       </Link>
 
@@ -79,7 +104,7 @@ export default function ProductCard({
         {/* Seller actions */}
         {sellerMode && (
           <div className="mt-3 flex gap-2">
-            <ToggleActiveButton productId={id} isActive={isActive ?? true} />
+            {!isDeleted && <ToggleActiveButton productId={id} isActive={isActive ?? true} />}
             <Link
               href={`/seller/products/${id}/edit`}
               className="flex-1 h-9 flex items-center justify-center rounded-lg border border-gray-200 text-[13px] font-medium text-gray-700 active:bg-gray-50 transition-colors"

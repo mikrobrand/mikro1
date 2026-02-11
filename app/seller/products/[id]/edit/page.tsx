@@ -9,9 +9,11 @@ export default function EditProductPage() {
 
   const [title, setTitle] = useState("");
   const [priceKrw, setPriceKrw] = useState("");
+  const [stock, setStock] = useState("");
   const [description, setDescription] = useState("");
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // Load current product data
@@ -21,6 +23,7 @@ export default function EditProductPage() {
       .then((data) => {
         setTitle(data.title ?? "");
         setPriceKrw(data.priceKrw ? Number(data.priceKrw).toLocaleString("ko-KR") : "");
+        setStock(data.variants?.[0]?.stock != null ? String(data.variants[0].stock) : "0");
         setDescription(data.description ?? "");
         setLoading(false);
       })
@@ -52,6 +55,11 @@ export default function EditProductPage() {
       setError("가격을 올바르게 입력해주세요");
       return;
     }
+    const stockNum = parseInt(stock.replace(/,/g, ""), 10);
+    if (isNaN(stockNum) || stockNum < 0) {
+      setError("재고를 올바르게 입력해주세요 (0 이상)");
+      return;
+    }
 
     setSubmitting(true);
 
@@ -62,6 +70,7 @@ export default function EditProductPage() {
         body: JSON.stringify({
           title: title.trim(),
           priceKrw: price,
+          stock: stockNum,
           description: description.trim() || undefined,
         }),
       });
@@ -76,6 +85,27 @@ export default function EditProductPage() {
     } catch (err) {
       setError(err instanceof Error ? err.message : "상품 수정에 실패했습니다");
       setSubmitting(false);
+    }
+  }
+
+  async function handleDelete() {
+    if (!confirm("정말로 이 상품을 삭제하시겠습니까? (복구 가능)")) return;
+    setDeleting(true);
+    try {
+      const res = await fetch(`/api/seller/products/${params.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ isDeleted: true }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || "삭제 실패");
+      }
+      router.push("/seller");
+      router.refresh();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "상품 삭제에 실패했습니다");
+      setDeleting(false);
     }
   }
 
@@ -126,6 +156,26 @@ export default function EditProductPage() {
         </div>
       </section>
 
+      {/* Stock */}
+      <section className="mb-5">
+        <label htmlFor="stock" className="block text-[14px] font-medium text-gray-700 mb-1.5">
+          재고 <span className="text-red-500">*</span>
+        </label>
+        <input
+          id="stock"
+          type="text"
+          inputMode="numeric"
+          value={stock}
+          onChange={(e) => {
+            const digits = e.target.value.replace(/[^0-9]/g, "");
+            setStock(digits);
+          }}
+          placeholder="0"
+          className="w-full h-12 px-4 rounded-xl border border-gray-200 text-[15px] placeholder:text-gray-400 focus:outline-none focus:border-black transition-colors"
+          disabled={submitting}
+        />
+      </section>
+
       {/* Description */}
       <section className="mb-8">
         <label htmlFor="desc" className="block text-[14px] font-medium text-gray-700 mb-1.5">
@@ -153,15 +203,23 @@ export default function EditProductPage() {
       <div className="flex gap-3">
         <button
           type="button"
+          onClick={handleDelete}
+          disabled={submitting || deleting}
+          className="h-[52px] px-5 rounded-xl bg-red-500 text-white text-[16px] font-bold active:bg-red-600 transition-colors disabled:opacity-50"
+        >
+          {deleting ? "삭제 중..." : "삭제"}
+        </button>
+        <button
+          type="button"
           onClick={() => router.back()}
-          disabled={submitting}
+          disabled={submitting || deleting}
           className="flex-1 h-[52px] rounded-xl border border-gray-200 text-[16px] font-bold text-gray-700 active:bg-gray-50 transition-colors disabled:opacity-50"
         >
           취소
         </button>
         <button
           type="submit"
-          disabled={submitting}
+          disabled={submitting || deleting}
           className="flex-1 h-[52px] bg-black text-white rounded-xl text-[16px] font-bold active:bg-gray-800 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
         >
           {submitting ? "저장 중..." : "저장"}

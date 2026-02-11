@@ -14,9 +14,10 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
-    const { title, priceKrw, category, description, imageUrls } = body as {
+    const { title, priceKrw, stock, category, description, imageUrls } = body as {
       title: string;
       priceKrw: number;
+      stock?: number;
       category?: string;
       description?: string;
       imageUrls: string[];
@@ -33,6 +34,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "이미지를 1장 이상 올려주세요" }, { status: 400 });
     }
 
+    const stockValue = typeof stock === "number" && stock >= 0 ? stock : 0;
+
     const product = await prisma.product.create({
       data: {
         sellerId,
@@ -48,7 +51,7 @@ export async function POST(req: NextRequest) {
           })),
         },
         variants: {
-          create: [{ color: "FREE", size: "FREE", stock: 9 }],
+          create: [{ color: "FREE", size: "FREE", stock: stockValue }],
         },
       },
     });

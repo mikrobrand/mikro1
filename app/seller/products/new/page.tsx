@@ -21,6 +21,7 @@ export default function NewProductPage() {
   const [images, setImages] = useState<ImageSlot[]>([]);
   const [title, setTitle] = useState("");
   const [priceKrw, setPriceKrw] = useState("");
+  const [stock, setStock] = useState("");
   const [category, setCategory] = useState("");
   const [description, setDescription] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -120,6 +121,11 @@ export default function NewProductPage() {
       setError("가격을 올바르게 입력해주세요");
       return;
     }
+    const stockNum = parseInt(stock.replace(/,/g, ""), 10);
+    if (isNaN(stockNum) || stockNum < 0) {
+      setError("재고를 올바르게 입력해주세요 (0 이상)");
+      return;
+    }
 
     setSubmitting(true);
 
@@ -143,6 +149,7 @@ export default function NewProductPage() {
         body: JSON.stringify({
           title: title.trim(),
           priceKrw: price,
+          stock: stockNum,
           category: category || undefined,
           description: description.trim() || undefined,
           imageUrls,
@@ -290,6 +297,26 @@ export default function NewProductPage() {
             disabled={submitting}
           />
         </div>
+      </section>
+
+      {/* Stock */}
+      <section className="mb-5">
+        <label htmlFor="stock" className="block text-[14px] font-medium text-gray-700 mb-1.5">
+          재고 <span className="text-red-500">*</span>
+        </label>
+        <input
+          id="stock"
+          type="text"
+          inputMode="numeric"
+          value={stock}
+          onChange={(e) => {
+            const digits = e.target.value.replace(/[^0-9]/g, "");
+            setStock(digits);
+          }}
+          placeholder="0"
+          className="w-full h-12 px-4 rounded-xl border border-gray-200 text-[15px] placeholder:text-gray-400 focus:outline-none focus:border-black transition-colors"
+          disabled={submitting}
+        />
       </section>
 
       {/* Category */}

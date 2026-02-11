@@ -1,0 +1,36 @@
+import { NextResponse } from "next/server";
+import { prisma } from "@/lib/prisma";
+
+export const runtime = "nodejs";
+
+export async function POST(request: Request) {
+  try {
+    const { ids } = (await request.json()) as { ids?: string[] };
+
+    if (!ids || !Array.isArray(ids) || ids.length === 0) {
+      return NextResponse.json([]);
+    }
+
+    // Limit to 50 to prevent abuse
+    const safeIds = ids.slice(0, 50);
+
+    const products = await prisma.product.findMany({
+      where: { id: { in: safeIds }, isActive: true, isDeleted: false },
+      include: {
+        images: { orderBy: { sortOrder: "asc" }, take: 1 },
+        seller: { include: { sellerProfile: true } },
+      },
+    });
+
+    // Preserve the order of ids
+    const productMap = new Map(products.map((p) => [p.id, p]));
+    const ordered = safeIds
+      .map((id) => productMap.get(id))
+      .filter(Boolean);
+
+    return NextResponse.json(ordered);
+  } catch (error) {
+    console.error("by-ids error:", error);
+    return NextResponse.json({ error: "Failed to fetch products" }, { status: 500 });
+  }
+}

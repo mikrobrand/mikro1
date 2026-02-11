@@ -1,8 +1,18 @@
 import Link from "next/link";
+import { Suspense } from "react";
 import { prisma } from "@/lib/prisma";
 import ProductCard from "@/components/ProductCard";
+import SellerProductFilter from "@/components/SellerProductFilter";
 
-export default async function SellerDashboardPage() {
+type Props = {
+  searchParams: Promise<{ showHidden?: string; showDeleted?: string }>;
+};
+
+export default async function SellerDashboardPage({ searchParams }: Props) {
+  const params = await searchParams;
+  const showHidden = params.showHidden === "1";
+  const showDeleted = params.showDeleted === "1";
+
   const sellerId = process.env.MVP_SELLER_ID!;
 
   const seller = await prisma.user.findUnique({
@@ -10,17 +20,34 @@ export default async function SellerDashboardPage() {
     include: { sellerProfile: true },
   });
 
-  const products = await prisma.product.findMany({
+  const allProducts = await prisma.product.findMany({
     where: { sellerId },
     orderBy: { createdAt: "desc" },
     include: {
       images: { orderBy: { sortOrder: "asc" }, take: 1 },
       seller: { include: { sellerProfile: true } },
+      variants: true,
     },
   });
 
   const shopName = seller?.sellerProfile?.shopName ?? "내 상점";
-  const activeCount = products.filter((p) => p.isActive).length;
+
+  // Counts (always based on all products)
+  const activeCount = allProducts.filter(
+    (p) => p.isActive && !p.isDeleted && (p.variants[0]?.stock ?? 0) > 0,
+  ).length;
+  const hiddenCount = allProducts.filter((p) => !p.isActive && !p.isDeleted).length;
+  const soldOutCount = allProducts.filter(
+    (p) => !p.isDeleted && p.isActive && (p.variants[0]?.stock ?? 0) <= 0,
+  ).length;
+  const deletedCount = allProducts.filter((p) => p.isDeleted).length;
+
+  // Filter based on toggles (default: active only)
+  const products = allProducts.filter((p) => {
+    if (p.isDeleted) return showDeleted;
+    if (!p.isActive) return showHidden;
+    return true; // active products always shown
+  });
 
   return (
     <div className="py-6">
@@ -29,7 +56,7 @@ export default async function SellerDashboardPage() {
         <div>
           <h1 className="text-[22px] font-bold text-black">{shopName}</h1>
           <p className="text-[13px] text-gray-500 mt-0.5">
-            전체 {products.length}개 · 판매중 {activeCount}개
+            전체 {allProducts.length}개
           </p>
         </div>
         <Link
@@ -38,6 +65,19 @@ export default async function SellerDashboardPage() {
         >
           상품 올리기
         </Link>
+      </div>
+
+      {/* Filter toggles */}
+      <div className="mb-4">
+        <Suspense fallback={null}>
+          <SellerProductFilter
+            totalCount={allProducts.length}
+            activeCount={activeCount}
+            hiddenCount={hiddenCount}
+            soldOutCount={soldOutCount}
+            deletedCount={deletedCount}
+          />
+        </Suspense>
       </div>
 
       {/* Product list */}
@@ -53,6 +93,8 @@ export default async function SellerDashboardPage() {
             sellerId={sellerId}
             sellerMode
             isActive={product.isActive}
+            isDeleted={product.isDeleted}
+            stock={product.variants[0]?.stock ?? 0}
           />
         ))}
 
@@ -60,14 +102,18 @@ export default async function SellerDashboardPage() {
           <div className="py-20 text-center">
             <p className="text-[40px] mb-3">📦</p>
             <p className="text-[15px] text-gray-500 mb-6">
-              아직 등록된 상품이 없어요
+              {allProducts.length === 0
+                ? "아직 등록된 상품이 없어요"
+                : "필터 조건에 맞는 상품이 없어요"}
             </p>
-            <Link
-              href="/seller/products/new"
-              className="inline-block px-6 py-3 bg-black text-white rounded-xl text-[14px] font-medium"
-            >
-              첫 상품 올리기
-            </Link>
+            {allProducts.length === 0 && (
+              <Link
+                href="/seller/products/new"
+                className="inline-block px-6 py-3 bg-black text-white rounded-xl text-[14px] font-medium"
+              >
+                첫 상품 올리기
+              </Link>
+            )}
           </div>
         )}
       </div>
