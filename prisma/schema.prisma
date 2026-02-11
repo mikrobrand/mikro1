@@ -27,6 +27,7 @@ enum ProductStatus {
 
 enum OrderStatus {
   PENDING
+  PAYMENT_FAILED
   PAID
   PREPARING
   SHIPPING
