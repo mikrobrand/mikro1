@@ -17,7 +17,6 @@ function pick<T>(arr: T[]) {
 }
 
 function makeOrderNo() {
-  // 표시용: YYYYMMDD-랜덤6자리
   const d = new Date();
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, "0");
@@ -26,8 +25,14 @@ function makeOrderNo() {
   return `${y}${m}${day}-${r}`;
 }
 
+/** Pick N unique random items from array */
+function pickN<T>(arr: T[], n: number): T[] {
+  const shuffled = [...arr].sort(() => Math.random() - 0.5);
+  return shuffled.slice(0, n);
+}
+
 async function main() {
-  // 깨끗하게 시작(개발용)
+  // Clean start
   await prisma.shipment.deleteMany();
   await prisma.payment.deleteMany();
   await prisma.orderItem.deleteMany();
@@ -38,7 +43,7 @@ async function main() {
   await prisma.sellerProfile.deleteMany();
   await prisma.user.deleteMany();
 
-  // Admin 1명
+  // Admin
   const admin = await prisma.user.create({
     data: {
       email: "admin@mikro.local",
@@ -47,7 +52,7 @@ async function main() {
     },
   });
 
-  // Sellers 3명 (승인 완료)
+  // Sellers
   const sellers = await Promise.all(
     ["동대문A", "동대문B", "동대문C"].map((shopName, i) =>
       prisma.user.create({
@@ -69,11 +74,11 @@ async function main() {
             },
           },
         },
-      })
-    )
+      }),
+    ),
   );
 
-  // Customers 5명
+  // Customers
   const customers = await Promise.all(
     Array.from({ length: 5 }).map((_, i) =>
       prisma.user.create({
@@ -82,16 +87,16 @@ async function main() {
           name: `Customer${i + 1}`,
           role: UserRole.CUSTOMER,
         },
-      })
-    )
+      }),
+    ),
   );
 
   const categories = ["아우터", "반팔티", "긴팔티", "니트", "셔츠", "바지", "원피스", "스커트"];
   const titleA = ["미니멀", "데일리", "스탠다드", "오버핏", "슬림핏", "빈티지", "캐주얼", "포멀"];
   const titleB = ["자켓", "가디건", "티셔츠", "니트", "셔츠", "데님", "슬랙스", "원피스"];
 
-  // Curated Unsplash fashion images – minimal, clean, feminine Korean-style
-  const minimalFashionImages: string[] = [
+  // Curated Unsplash fashion images
+  const fashionImages: string[] = [
     "https://images.unsplash.com/photo-1581044777550-4cfa60707998?auto=format&fit=crop&w=900&q=80",
     "https://images.unsplash.com/photo-1509631179647-0177331693ae?auto=format&fit=crop&w=900&q=80",
     "https://images.unsplash.com/photo-1485968579580-b6d095142e6e?auto=format&fit=crop&w=900&q=80",
@@ -106,19 +111,27 @@ async function main() {
     "https://images.unsplash.com/photo-1434389677669-e08b4cda3a44?auto=format&fit=crop&w=900&q=80",
     "https://images.unsplash.com/photo-1487222477894-8943e31ef7b2?auto=format&fit=crop&w=900&q=80",
     "https://images.unsplash.com/photo-1475180098004-ca77a66827be?auto=format&fit=crop&w=900&q=80",
-    "https://images.unsplash.com/photo-1509631179647-0177331693ae?auto=format&fit=crop&w=900&q=80",
     "https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=900&q=80",
     "https://images.unsplash.com/photo-1524504388940-b1c1722653e1?auto=format&fit=crop&w=900&q=80",
     "https://images.unsplash.com/photo-1469334031218-e382a71b716b?auto=format&fit=crop&w=900&q=80",
-    "https://images.unsplash.com/photo-1509631179647-0177331693ae?auto=format&fit=crop&w=900&q=80",
     "https://images.unsplash.com/photo-1483985988355-763728e1935b?auto=format&fit=crop&w=900&q=80",
+    "https://images.unsplash.com/photo-1490481651871-ab68de25d43d?auto=format&fit=crop&w=900&q=80",
+    "https://images.unsplash.com/photo-1562572159-4efc207f5aff?auto=format&fit=crop&w=900&q=80",
   ];
 
-  /** Pick N unique random images from the array */
-  function pickImages(n: number): string[] {
-    const shuffled = [...minimalFashionImages].sort(() => Math.random() - 0.5);
-    return shuffled.slice(0, n);
-  }
+  // Content-style images (detail / look-book feel)
+  const contentStyleImages: string[] = [
+    "https://images.unsplash.com/photo-1558618666-fcd25c85f82e?auto=format&fit=crop&w=900&q=80",
+    "https://images.unsplash.com/photo-1441986300917-64674bd600d8?auto=format&fit=crop&w=900&q=80",
+    "https://images.unsplash.com/photo-1490481651871-ab68de25d43d?auto=format&fit=crop&w=900&q=80",
+    "https://images.unsplash.com/photo-1445205170230-053b83016050?auto=format&fit=crop&w=900&q=80",
+    "https://images.unsplash.com/photo-1558191053-0b52a0b9e3de?auto=format&fit=crop&w=900&q=80",
+    "https://images.unsplash.com/photo-1556905055-8f358a7a47b2?auto=format&fit=crop&w=900&q=80",
+    "https://images.unsplash.com/photo-1552374196-1ab2a1c593e8?auto=format&fit=crop&w=900&q=80",
+    "https://images.unsplash.com/photo-1507680434567-5739c80be1ac?auto=format&fit=crop&w=900&q=80",
+  ];
+
+  const sizes = ["S", "M", "L"];
 
   // Products 30개
   const products = [];
@@ -127,7 +140,10 @@ async function main() {
     const category = pick(categories);
     const title = `${pick(titleA)} ${pick(titleB)} ${randInt(1, 99)}`;
     const price = randInt(19000, 129000);
-    const imgs = pickImages(2);
+
+    // Pick 3 MAIN images and 2 CONTENT images
+    const mainImgs = pickN(fashionImages, 3);
+    const contentImgs = pickN(contentStyleImages, 2);
 
     const product = await prisma.product.create({
       data: {
@@ -139,18 +155,26 @@ async function main() {
         status: ProductStatus.ACTIVE,
         images: {
           create: [
-            { url: imgs[0], sortOrder: 0 },
-            { url: imgs[1], sortOrder: 1 },
+            // MAIN images
+            ...mainImgs.map((url, idx) => ({
+              url,
+              kind: "MAIN" as const,
+              sortOrder: idx,
+            })),
+            // CONTENT images
+            ...contentImgs.map((url, idx) => ({
+              url,
+              kind: "CONTENT" as const,
+              sortOrder: idx,
+            })),
           ],
         },
         variants: {
-          create: [
-            {
-              color: "FREE",
-              size: "FREE",
-              stock: randInt(1, 50),
-            },
-          ],
+          create: sizes.map((s) => ({
+            color: "FREE",
+            sizeLabel: s,
+            stock: randInt(3, 30),
+          })),
         },
       },
       include: { variants: true },
@@ -200,7 +224,6 @@ async function main() {
       },
     });
 
-    // 1개는 배송까지
     if (i === 0) {
       await prisma.shipment.create({
         data: {
@@ -214,7 +237,11 @@ async function main() {
   }
 
   console.log("✅ Seed complete");
-  console.log({ adminEmail: admin.email, sellerEmails: sellers.map(s => s.email), customerEmails: customers.map(c => c.email) });
+  console.log({
+    adminEmail: admin.email,
+    sellerEmails: sellers.map((s) => s.email),
+    customerEmails: customers.map((c) => c.email),
+  });
 }
 
 main()

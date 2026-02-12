@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import Container from "@/components/Container";
+import ImageCarousel from "@/components/ImageCarousel";
 import { formatKrw } from "@/lib/format";
 import WishlistButton from "@/components/WishlistButton";
 
@@ -15,37 +16,28 @@ export default async function ProductDetailPage({ params }: Props) {
     include: {
       images: { orderBy: { sortOrder: "asc" } },
       seller: { include: { sellerProfile: true } },
-      variants: true,
+      variants: { orderBy: { createdAt: "asc" } },
     },
   });
 
   if (!product || product.isDeleted) notFound();
 
   const shopName = product.seller.sellerProfile?.shopName ?? "알수없음";
-  const stock = product.variants[0]?.stock ?? 0;
-  const isSoldOut = stock <= 0;
+  const totalStock = product.variants.reduce((sum, v) => sum + v.stock, 0);
+  const isSoldOut = totalStock <= 0;
   const isDisabled = isSoldOut || !product.isActive;
+
+  // Split images by kind
+  const mainImages = product.images.filter((i) => i.kind === "MAIN");
+  const contentImages = product.images.filter((i) => i.kind === "CONTENT");
 
   return (
     <Container>
-      {/* Product images - stacked vertically */}
-      {product.images.length > 0 ? (
-        <div className="flex flex-col">
-          {product.images.map((img) => (
-            <div key={img.id} className="w-full aspect-[3/4] bg-gray-100">
-              <img
-                src={img.url}
-                alt={product.title}
-                className="w-full h-full object-cover"
-              />
-            </div>
-          ))}
-        </div>
-      ) : (
-        <div className="w-full aspect-[3/4] bg-gray-100 flex items-center justify-center text-gray-300 text-sm">
-          이미지 없음
-        </div>
-      )}
+      {/* Main images – Instagram-like horizontal swipe */}
+      <ImageCarousel
+        images={mainImages.map((i) => ({ url: i.url }))}
+        aspect="3/4"
+      />
 
       {/* Product info */}
       <div className="py-5">
@@ -77,17 +69,25 @@ export default async function ProductDetailPage({ params }: Props) {
           </span>
         )}
 
-        {/* Variants */}
+        {/* Variants — size/stock info */}
         {product.variants.length > 0 && (
           <div className="mt-4 flex flex-wrap gap-2">
-            {product.variants.map((v) => (
-              <span
-                key={v.id}
-                className="px-3 py-1.5 rounded-full bg-gray-100 text-[13px] text-gray-600"
-              >
-                {v.color} / {v.size} (재고 {v.stock})
-              </span>
-            ))}
+            {product.variants.map((v) => {
+              const label = v.sizeLabel === "FREE" ? "FREE" : v.sizeLabel;
+              const outOfStock = v.stock <= 0;
+              return (
+                <span
+                  key={v.id}
+                  className={`px-3 py-1.5 rounded-full text-[13px] ${
+                    outOfStock
+                      ? "bg-gray-100 text-gray-400 line-through"
+                      : "bg-gray-100 text-gray-600"
+                  }`}
+                >
+                  {label} ({v.stock})
+                </span>
+              );
+            })}
           </div>
         )}
 
@@ -100,7 +100,23 @@ export default async function ProductDetailPage({ params }: Props) {
           </div>
         )}
 
-        {/* CTA placeholders */}
+        {/* Content images – stacked vertically */}
+        {contentImages.length > 0 && (
+          <div className="mt-6 pt-5 border-t border-gray-100 space-y-2">
+            {contentImages.map((img) => (
+              <div key={img.id} className="w-full rounded-lg overflow-hidden">
+                <img
+                  src={img.url}
+                  alt=""
+                  className="w-full h-auto"
+                  loading="lazy"
+                />
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* CTA */}
         <div className="mt-8 flex gap-3">
           <button
             className="flex-1 h-[52px] bg-black text-white rounded-xl text-[16px] font-bold active:bg-gray-800 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"

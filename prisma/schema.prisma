@@ -44,6 +44,11 @@ enum PaymentStatus {
   CANCELED
 }
 
+enum ProductImageKind {
+  MAIN
+  CONTENT
+}
+
 model User {
   id        String   @id @default(cuid())
   email     String?  @unique
@@ -106,12 +111,13 @@ model Product {
 }
 
 model ProductImage {
-  id        String   @id @default(cuid())
+  id        String           @id @default(cuid())
   productId String
-  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  product   Product          @relation(fields: [productId], references: [id], onDelete: Cascade)
 
   url       String
-  sortOrder Int      @default(0)
+  kind      ProductImageKind @default(MAIN)
+  sortOrder Int              @default(0)
 
   createdAt DateTime @default(now())
 }
@@ -121,15 +127,17 @@ model ProductVariant {
   productId String
   product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
 
-  color     String? // MVP optional
-  size      String? // MVP optional
-  stock     Int     @default(0)
+  color     String @default("FREE")
+  sizeLabel String @default("FREE")
+  stock     Int    @default(0)
+  sku       String? @unique
 
   orderItems OrderItem[] @relation("VariantOrderItems")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  @@unique([productId, color, sizeLabel])
   @@index([productId])
 }
 

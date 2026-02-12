@@ -17,7 +17,7 @@ export async function POST(request: Request) {
     const products = await prisma.product.findMany({
       where: { id: { in: safeIds }, isActive: true, isDeleted: false },
       include: {
-        images: { orderBy: { sortOrder: "asc" }, take: 1 },
+        images: { where: { kind: "MAIN" }, orderBy: { sortOrder: "asc" } },
         seller: { include: { sellerProfile: true } },
       },
     });

@@ -1,16 +1,39 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter, useParams } from "next/navigation";
+
+const CATEGORIES = ["아우터", "반팔티", "긴팔티", "니트", "셔츠", "바지", "원피스", "스커트"];
+const MAX_MAIN = 10;
+const MAX_CONTENT = 20;
+
+type ImageSlot = {
+  file?: File;
+  preview: string;
+  status: "done" | "pending" | "uploading" | "error";
+  progress: number;
+  publicUrl?: string;
+};
+
+type VariantRow = {
+  sizeLabel: string;
+  stock: number;
+};
 
 export default function EditProductPage() {
   const router = useRouter();
   const params = useParams<{ id: string }>();
+  const mainInputRef = useRef<HTMLInputElement>(null);
+  const contentInputRef = useRef<HTMLInputElement>(null);
 
+  const [mainImages, setMainImages] = useState<ImageSlot[]>([]);
+  const [contentImages, setContentImages] = useState<ImageSlot[]>([]);
+  const [variants, setVariants] = useState<VariantRow[]>([]);
   const [title, setTitle] = useState("");
   const [priceKrw, setPriceKrw] = useState("");
-  const [stock, setStock] = useState("");
+  const [category, setCategory] = useState("");
   const [description, setDescription] = useState("");
+  const [isActive, setIsActive] = useState(true);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -23,8 +46,46 @@ export default function EditProductPage() {
       .then((data) => {
         setTitle(data.title ?? "");
         setPriceKrw(data.priceKrw ? Number(data.priceKrw).toLocaleString("ko-KR") : "");
-        setStock(data.variants?.[0]?.stock != null ? String(data.variants[0].stock) : "0");
+        setCategory(data.category ?? "");
         setDescription(data.description ?? "");
+        setIsActive(data.isActive ?? true);
+
+        // Load existing main images
+        if (data.mainImages) {
+          setMainImages(
+            data.mainImages.map((img: { url: string }) => ({
+              preview: img.url,
+              status: "done" as const,
+              progress: 100,
+              publicUrl: img.url,
+            })),
+          );
+        }
+
+        // Load existing content images
+        if (data.contentImages) {
+          setContentImages(
+            data.contentImages.map((img: { url: string }) => ({
+              preview: img.url,
+              status: "done" as const,
+              progress: 100,
+              publicUrl: img.url,
+            })),
+          );
+        }
+
+        // Load existing variants
+        if (data.variants && data.variants.length > 0) {
+          setVariants(
+            data.variants.map((v: { sizeLabel: string; stock: number }) => ({
+              sizeLabel: v.sizeLabel,
+              stock: v.stock,
+            })),
+          );
+        } else {
+          setVariants([{ sizeLabel: "FREE", stock: 0 }]);
+        }
+
         setLoading(false);
       })
       .catch(() => {
@@ -32,6 +93,117 @@ export default function EditProductPage() {
         setLoading(false);
       });
   }, [params.id]);
+
+  // ---------- Image helpers ----------
+  function handleFilePick(
+    e: React.ChangeEvent<HTMLInputElement>,
+    setter: React.Dispatch<React.SetStateAction<ImageSlot[]>>,
+    max: number,
+    current: ImageSlot[],
+  ) {
+    const files = e.target.files;
+    if (!files) return;
+    const remaining = max - current.length;
+    const picked = Array.from(files).slice(0, remaining);
+    const newSlots: ImageSlot[] = picked.map((file) => ({
+      file,
+      preview: URL.createObjectURL(file),
+      status: "pending",
+      progress: 0,
+    }));
+    setter((prev) => [...prev, ...newSlots]);
+    e.target.value = "";
+  }
+
+  function removeImage(
+    index: number,
+    setter: React.Dispatch<React.SetStateAction<ImageSlot[]>>,
+  ) {
+    setter((prev) => {
+      const copy = [...prev];
+      if (copy[index].file) URL.revokeObjectURL(copy[index].preview);
+      copy.splice(index, 1);
+      return copy;
+    });
+  }
+
+  function moveImage(
+    index: number,
+    direction: -1 | 1,
+    setter: React.Dispatch<React.SetStateAction<ImageSlot[]>>,
+  ) {
+    setter((prev) => {
+      const copy = [...prev];
+      const target = index + direction;
+      if (target < 0 || target >= copy.length) return copy;
+      [copy[index], copy[target]] = [copy[target], copy[index]];
+      return copy;
+    });
+  }
+
+  async function uploadImage(
+    slot: ImageSlot,
+    index: number,
+    setter: React.Dispatch<React.SetStateAction<ImageSlot[]>>,
+  ): Promise<string> {
+    if (slot.publicUrl) return slot.publicUrl;
+    if (!slot.file) throw new Error("No file");
+
+    setter((prev) => {
+      const copy = [...prev];
+      copy[index] = { ...copy[index], status: "uploading", progress: 10 };
+      return copy;
+    });
+
+    const presignRes = await fetch("/api/uploads/presign", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        fileName: slot.file.name,
+        contentType: slot.file.type,
+      }),
+    });
+    if (!presignRes.ok) throw new Error("Presign failed");
+    const { uploadUrl, publicUrl } = await presignRes.json();
+
+    setter((prev) => {
+      const copy = [...prev];
+      copy[index] = { ...copy[index], progress: 30 };
+      return copy;
+    });
+
+    const putRes = await fetch(uploadUrl, {
+      method: "PUT",
+      body: slot.file,
+      headers: { "Content-Type": slot.file.type },
+    });
+    if (!putRes.ok) throw new Error("S3 upload failed");
+
+    setter((prev) => {
+      const copy = [...prev];
+      copy[index] = { ...copy[index], status: "done", progress: 100, publicUrl };
+      return copy;
+    });
+
+    return publicUrl;
+  }
+
+  // ---------- Variant helpers ----------
+  function updateVariant(index: number, field: keyof VariantRow, value: string | number) {
+    setVariants((prev) => {
+      const copy = [...prev];
+      copy[index] = { ...copy[index], [field]: value };
+      return copy;
+    });
+  }
+
+  function addVariant() {
+    setVariants((prev) => [...prev, { sizeLabel: "", stock: 0 }]);
+  }
+
+  function removeVariant(index: number) {
+    setVariants((prev) => prev.filter((_, i) => i !== index));
+  }
 
   function handlePriceChange(value: string) {
     const digits = value.replace(/[^0-9]/g, "");
@@ -42,36 +214,65 @@ export default function EditProductPage() {
     setPriceKrw(Number(digits).toLocaleString("ko-KR"));
   }
 
+  // ---------- Submit ----------
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
 
+    if (mainImages.length === 0) {
+      setError("대표 이미지를 1장 이상 올려주세요");
+      return;
+    }
     if (!title.trim()) {
       setError("상품명을 입력해주세요");
       return;
     }
     const price = parseInt(priceKrw.replace(/,/g, ""), 10);
-    if (!price || price < 1) {
+    if (isNaN(price) || price < 0) {
       setError("가격을 올바르게 입력해주세요");
       return;
     }
-    const stockNum = parseInt(stock.replace(/,/g, ""), 10);
-    if (isNaN(stockNum) || stockNum < 0) {
-      setError("재고를 올바르게 입력해주세요 (0 이상)");
+    if (variants.length === 0) {
+      setError("사이즈/재고를 1개 이상 입력해주세요");
       return;
+    }
+    for (const v of variants) {
+      if (!v.sizeLabel.trim()) {
+        setError("사이즈명을 입력해주세요");
+        return;
+      }
     }
 
     setSubmitting(true);
 
     try {
+      // Upload new images
+      const mainUrls: string[] = [];
+      for (let i = 0; i < mainImages.length; i++) {
+        const url = await uploadImage(mainImages[i], i, setMainImages);
+        mainUrls.push(url);
+      }
+
+      const contentUrls: string[] = [];
+      for (let i = 0; i < contentImages.length; i++) {
+        const url = await uploadImage(contentImages[i], i, setContentImages);
+        contentUrls.push(url);
+      }
+
       const res = await fetch(`/api/seller/products/${params.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           title: title.trim(),
           priceKrw: price,
-          stock: stockNum,
+          category: category || undefined,
           description: description.trim() || undefined,
+          mainImages: mainUrls,
+          contentImages: contentUrls,
+          variants: variants.map((v) => ({
+            sizeLabel: v.sizeLabel.trim(),
+            stock: v.stock,
+          })),
         }),
       });
 
@@ -88,14 +289,13 @@ export default function EditProductPage() {
     }
   }
 
+  // ---------- Delete ----------
   async function handleDelete() {
-    if (!confirm("정말로 이 상품을 삭제하시겠습니까? (복구 가능)")) return;
+    if (!confirm("정말로 이 상품을 삭제하시겠습니까?")) return;
     setDeleting(true);
     try {
       const res = await fetch(`/api/seller/products/${params.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ isDeleted: true }),
+        method: "DELETE",
       });
       if (!res.ok) {
         const data = await res.json();
@@ -117,9 +317,108 @@ export default function EditProductPage() {
 
   return (
     <form onSubmit={handleSubmit} className="py-6">
-      <h1 className="text-[22px] font-bold text-black mb-6">상품 수정</h1>
+      <div className="flex items-center justify-between mb-6">
+        <h1 className="text-[22px] font-bold text-black">상품 수정</h1>
+        <button
+          type="button"
+          onClick={() => {
+            // Toggle isActive via separate PATCH
+            fetch(`/api/seller/products/${params.id}`, {
+              method: "PATCH",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ isActive: !isActive }),
+            }).then(() => {
+              setIsActive(!isActive);
+            });
+          }}
+          className={`px-3 py-1.5 rounded-lg text-[12px] font-medium ${
+            isActive
+              ? "bg-green-50 text-green-700 border border-green-200"
+              : "bg-gray-100 text-gray-500 border border-gray-200"
+          }`}
+        >
+          {isActive ? "판매중 ●" : "숨김 ●"}
+        </button>
+      </div>
 
-      {/* Title */}
+      {/* ===== Main Images ===== */}
+      <ImagePickerSection
+        label="대표 이미지"
+        required
+        images={mainImages}
+        max={MAX_MAIN}
+        inputRef={mainInputRef}
+        onPick={(e) => handleFilePick(e, setMainImages, MAX_MAIN, mainImages)}
+        onRemove={(i) => removeImage(i, setMainImages)}
+        onMove={(i, d) => moveImage(i, d, setMainImages)}
+        submitting={submitting}
+        showMainBadge
+      />
+
+      {/* ===== Content Images ===== */}
+      <ImagePickerSection
+        label="상세 이미지"
+        images={contentImages}
+        max={MAX_CONTENT}
+        inputRef={contentInputRef}
+        onPick={(e) => handleFilePick(e, setContentImages, MAX_CONTENT, contentImages)}
+        onRemove={(i) => removeImage(i, setContentImages)}
+        onMove={(i, d) => moveImage(i, d, setContentImages)}
+        submitting={submitting}
+      />
+
+      {/* ===== Variants ===== */}
+      <section className="mb-6">
+        <label className="block text-[14px] font-medium text-gray-700 mb-2">
+          사이즈/재고 <span className="text-red-500">*</span>
+        </label>
+        <div className="space-y-2">
+          {variants.map((v, i) => (
+            <div key={i} className="flex gap-2 items-center">
+              <input
+                type="text"
+                value={v.sizeLabel}
+                onChange={(e) => updateVariant(i, "sizeLabel", e.target.value)}
+                placeholder="사이즈"
+                className="flex-1 h-10 px-3 rounded-lg border border-gray-200 text-[14px] focus:outline-none focus:border-black"
+                disabled={submitting}
+              />
+              <input
+                type="number"
+                inputMode="numeric"
+                value={v.stock}
+                onChange={(e) => updateVariant(i, "stock", Math.max(0, parseInt(e.target.value) || 0))}
+                placeholder="재고"
+                className="w-20 h-10 px-3 rounded-lg border border-gray-200 text-[14px] text-center focus:outline-none focus:border-black"
+                min={0}
+                disabled={submitting}
+              />
+              {variants.length > 1 && (
+                <button
+                  type="button"
+                  onClick={() => removeVariant(i)}
+                  className="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-red-500"
+                  disabled={submitting}
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+        <button
+          type="button"
+          onClick={addVariant}
+          className="mt-2 px-4 py-2 text-[13px] text-gray-600 border border-dashed border-gray-300 rounded-lg hover:bg-gray-50"
+          disabled={submitting}
+        >
+          + 사이즈 추가
+        </button>
+      </section>
+
+      {/* ===== Title ===== */}
       <section className="mb-5">
         <label htmlFor="title" className="block text-[14px] font-medium text-gray-700 mb-1.5">
           상품명 <span className="text-red-500">*</span>
@@ -136,7 +435,7 @@ export default function EditProductPage() {
         />
       </section>
 
-      {/* Price */}
+      {/* ===== Price ===== */}
       <section className="mb-5">
         <label htmlFor="price" className="block text-[14px] font-medium text-gray-700 mb-1.5">
           가격 (원) <span className="text-red-500">*</span>
@@ -156,27 +455,26 @@ export default function EditProductPage() {
         </div>
       </section>
 
-      {/* Stock */}
+      {/* ===== Category ===== */}
       <section className="mb-5">
-        <label htmlFor="stock" className="block text-[14px] font-medium text-gray-700 mb-1.5">
-          재고 <span className="text-red-500">*</span>
+        <label htmlFor="category" className="block text-[14px] font-medium text-gray-700 mb-1.5">
+          카테고리
         </label>
-        <input
-          id="stock"
-          type="text"
-          inputMode="numeric"
-          value={stock}
-          onChange={(e) => {
-            const digits = e.target.value.replace(/[^0-9]/g, "");
-            setStock(digits);
-          }}
-          placeholder="0"
-          className="w-full h-12 px-4 rounded-xl border border-gray-200 text-[15px] placeholder:text-gray-400 focus:outline-none focus:border-black transition-colors"
+        <select
+          id="category"
+          value={category}
+          onChange={(e) => setCategory(e.target.value)}
+          className="w-full h-12 px-4 rounded-xl border border-gray-200 text-[15px] text-gray-900 bg-white focus:outline-none focus:border-black transition-colors appearance-none"
           disabled={submitting}
-        />
+        >
+          <option value="">선택안함</option>
+          {CATEGORIES.map((c) => (
+            <option key={c} value={c}>{c}</option>
+          ))}
+        </select>
       </section>
 
-      {/* Description */}
+      {/* ===== Description ===== */}
       <section className="mb-8">
         <label htmlFor="desc" className="block text-[14px] font-medium text-gray-700 mb-1.5">
           상품 설명
@@ -226,5 +524,116 @@ export default function EditProductPage() {
         </button>
       </div>
     </form>
+  );
+}
+
+/* ================================================================== */
+/*  Image Picker Section                                               */
+/* ================================================================== */
+
+function ImagePickerSection({
+  label,
+  required,
+  images,
+  max,
+  inputRef,
+  onPick,
+  onRemove,
+  onMove,
+  submitting,
+  showMainBadge,
+}: {
+  label: string;
+  required?: boolean;
+  images: ImageSlot[];
+  max: number;
+  inputRef: React.RefObject<HTMLInputElement | null>;
+  onPick: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  onRemove: (i: number) => void;
+  onMove: (i: number, d: -1 | 1) => void;
+  submitting: boolean;
+  showMainBadge?: boolean;
+}) {
+  return (
+    <section className="mb-6">
+      <label className="block text-[14px] font-medium text-gray-700 mb-2">
+        {label} ({images.length}/{max})
+        {required && <span className="text-red-500 ml-0.5">*</span>}
+      </label>
+
+      <div className="flex gap-2 overflow-x-auto pb-2">
+        {images.length < max && (
+          <button
+            type="button"
+            onClick={() => inputRef.current?.click()}
+            className="shrink-0 w-20 h-20 rounded-xl border-2 border-dashed border-gray-300 flex flex-col items-center justify-center text-gray-400 active:bg-gray-50 transition-colors"
+          >
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+            </svg>
+            <span className="text-[11px] mt-0.5">추가</span>
+          </button>
+        )}
+
+        {images.map((slot, i) => (
+          <div key={i} className="shrink-0 w-20 h-20 relative rounded-xl overflow-hidden bg-gray-100">
+            <img src={slot.preview} alt="" className="w-full h-full object-cover" />
+
+            {showMainBadge && i === 0 && (
+              <span className="absolute top-0.5 left-0.5 bg-black text-white text-[9px] font-bold px-1.5 py-0.5 rounded">
+                대표
+              </span>
+            )}
+
+            {slot.status === "uploading" && (
+              <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
+                <div className="w-8 h-8 rounded-full border-2 border-white/30 border-t-white animate-spin" />
+              </div>
+            )}
+
+            {!submitting && (
+              <div className="absolute top-0.5 right-0.5 flex gap-0.5">
+                {i > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => onMove(i, -1)}
+                    className="w-5 h-5 bg-black/60 rounded-full flex items-center justify-center text-white text-[10px]"
+                  >
+                    ←
+                  </button>
+                )}
+                {i < images.length - 1 && (
+                  <button
+                    type="button"
+                    onClick={() => onMove(i, 1)}
+                    className="w-5 h-5 bg-black/60 rounded-full flex items-center justify-center text-white text-[10px]"
+                  >
+                    →
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => onRemove(i)}
+                  className="w-5 h-5 bg-black/60 rounded-full flex items-center justify-center"
+                >
+                  <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+
+      <input
+        ref={inputRef}
+        type="file"
+        accept="image/*"
+        multiple
+        onChange={onPick}
+        className="hidden"
+      />
+    </section>
   );
 }

@@ -23,14 +23,7 @@ export default async function HomePage({ searchParams }: Props) {
 
   const dbCategory = category ? categoryMap[category] : undefined;
 
-  const products: Array<{
-    id: string;
-    title: string;
-    priceKrw: number;
-    sellerId: string;
-    images: { url: string }[];
-    seller: { sellerProfile: { shopName: string } | null };
-  }> = await prisma.product.findMany({
+  const products = await prisma.product.findMany({
     where: {
       status: "ACTIVE",
       isActive: true,
@@ -40,7 +33,7 @@ export default async function HomePage({ searchParams }: Props) {
     orderBy: { createdAt: "desc" },
     take: 20,
     include: {
-      images: { orderBy: { sortOrder: "asc" }, take: 1 },
+      images: { where: { kind: "MAIN" }, orderBy: { sortOrder: "asc" } },
       seller: { include: { sellerProfile: true } },
     },
   });
@@ -81,7 +74,7 @@ export default async function HomePage({ searchParams }: Props) {
             id={product.id}
             title={product.title}
             priceKrw={product.priceKrw}
-            imageUrl={product.images[0]?.url ?? null}
+            images={product.images.map((i) => ({ url: i.url }))}
             shopName={product.seller.sellerProfile?.shopName ?? "알수없음"}
             sellerId={product.sellerId}
           />

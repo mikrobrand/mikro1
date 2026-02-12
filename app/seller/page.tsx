@@ -9,6 +9,12 @@ type Props = {
   searchParams: Promise<{ showHidden?: string; showDeleted?: string }>;
 };
 
+/** Build variant summary string like "S:10 M:8 L:6" */
+function buildVariantSummary(variants: { sizeLabel: string; stock: number }[]): string {
+  if (variants.length <= 1 && variants[0]?.sizeLabel === "FREE") return "";
+  return variants.map((v) => `${v.sizeLabel}:${v.stock}`).join(" ");
+}
+
 export default async function SellerDashboardPage({ searchParams }: Props) {
   const params = await searchParams;
   const showHidden = params.showHidden === "1";
@@ -26,7 +32,7 @@ export default async function SellerDashboardPage({ searchParams }: Props) {
     where: { sellerId },
     orderBy: { createdAt: "desc" },
     include: {
-      images: { orderBy: { sortOrder: "asc" }, take: 1 },
+      images: { where: { kind: "MAIN" }, orderBy: { sortOrder: "asc" } },
       seller: { include: { sellerProfile: true } },
       variants: true,
     },
@@ -34,21 +40,28 @@ export default async function SellerDashboardPage({ searchParams }: Props) {
 
   const shopName = seller?.sellerProfile?.shopName ?? "내 상점";
 
-  // Counts (always based on all products)
-  const activeCount = allProducts.filter(
-    (p) => p.isActive && !p.isDeleted && (p.variants[0]?.stock ?? 0) > 0,
-  ).length;
-  const hiddenCount = allProducts.filter((p) => !p.isActive && !p.isDeleted).length;
-  const soldOutCount = allProducts.filter(
-    (p) => !p.isDeleted && p.isActive && (p.variants[0]?.stock ?? 0) <= 0,
-  ).length;
-  const deletedCount = allProducts.filter((p) => p.isDeleted).length;
+  // Compute total stock per product
+  const productsWithStock = allProducts.map((p) => {
+    const totalStock = p.variants.reduce((sum, v) => sum + v.stock, 0);
+    const variantSummary = buildVariantSummary(p.variants);
+    return { ...p, totalStock, variantSummary };
+  });
 
-  // Filter based on toggles (default: active only)
-  const products = allProducts.filter((p) => {
+  // Counts
+  const activeCount = productsWithStock.filter(
+    (p) => p.isActive && !p.isDeleted && p.totalStock > 0,
+  ).length;
+  const hiddenCount = productsWithStock.filter((p) => !p.isActive && !p.isDeleted).length;
+  const soldOutCount = productsWithStock.filter(
+    (p) => !p.isDeleted && p.isActive && p.totalStock <= 0,
+  ).length;
+  const deletedCount = productsWithStock.filter((p) => p.isDeleted).length;
+
+  // Filter based on toggles
+  const products = productsWithStock.filter((p) => {
     if (p.isDeleted) return showDeleted;
     if (!p.isActive) return showHidden;
-    return true; // active products always shown
+    return true;
   });
 
   return (
@@ -90,13 +103,14 @@ export default async function SellerDashboardPage({ searchParams }: Props) {
             id={product.id}
             title={product.title}
             priceKrw={product.priceKrw}
-            imageUrl={product.images[0]?.url ?? null}
+            images={product.images.map((i) => ({ url: i.url }))}
             shopName={shopName}
             sellerId={sellerId}
             sellerMode
             isActive={product.isActive}
             isDeleted={product.isDeleted}
-            stock={product.variants[0]?.stock ?? 0}
+            totalStock={product.totalStock}
+            variantSummary={product.variantSummary}
           />
         ))}
 

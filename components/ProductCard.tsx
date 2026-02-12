@@ -2,34 +2,41 @@ import Link from "next/link";
 import { formatKrw } from "@/lib/format";
 import ToggleActiveButton from "@/components/ToggleActiveButton";
 import WishlistButton from "@/components/WishlistButton";
+import ImageCarousel from "@/components/ImageCarousel";
 
 type ProductCardProps = {
   id: string;
   title: string;
   priceKrw: number;
-  imageUrl: string | null;
+  /** Multiple MAIN images for swipe carousel */
+  images: { url: string }[];
   shopName: string;
   sellerId: string;
   /** Seller dashboard mode – show badge + actions */
   sellerMode?: boolean;
   isActive?: boolean;
   isDeleted?: boolean;
-  stock?: number;
+  /** Total stock across all variants */
+  totalStock?: number;
+  /** e.g. "S:10 M:8 L:6" */
+  variantSummary?: string;
 };
 
 export default function ProductCard({
   id,
   title,
   priceKrw,
-  imageUrl,
+  images,
   shopName,
   sellerId,
   sellerMode,
   isActive,
   isDeleted,
-  stock,
+  totalStock,
+  variantSummary,
 }: ProductCardProps) {
-  const isSoldOut = (stock ?? 0) <= 0;
+  const stock = totalStock ?? 0;
+  const isSoldOut = stock <= 0;
 
   // Determine status badge for seller mode
   let badgeLabel = "";
@@ -54,36 +61,34 @@ export default function ProductCard({
 
   return (
     <article className={`bg-white ${dimmed ? "opacity-60" : ""}`}>
-      {/* Product image - big like 무신사 */}
-      <Link href={`/p/${id}`} className="block">
-        <div className="relative w-full aspect-[3/4] bg-gray-100 overflow-hidden rounded-lg">
-          {imageUrl ? (
-            <img
-              src={imageUrl}
-              alt={title}
-              className="w-full h-full object-cover"
-            />
-          ) : (
-            <div className="w-full h-full flex items-center justify-center text-gray-300 text-sm">
-              이미지 없음
-            </div>
-          )}
+      {/* Product image carousel */}
+      <div className="relative rounded-lg overflow-hidden">
+        {sellerMode ? (
+          // Seller mode: link wraps carousel
+          <Link href={`/seller/products/${id}/edit`} className="block">
+            <ImageCarousel images={images} aspect="3/4" dots={!sellerMode} />
+          </Link>
+        ) : (
+          <>
+            <Link href={`/p/${id}`} className="block">
+              <ImageCarousel images={images} aspect="3/4" />
+            </Link>
+            {/* Wishlist heart – customer mode only */}
+            <WishlistButton productId={id} variant="card" />
+          </>
+        )}
 
-          {/* Status badge – seller mode only */}
-          {sellerMode && badgeLabel && (
-            <span className={`absolute top-2 left-2 px-2.5 py-1 rounded-lg text-[11px] font-bold ${badgeClass}`}>
-              {badgeLabel}
-            </span>
-          )}
+        {/* Status badge – seller mode only */}
+        {sellerMode && badgeLabel && (
+          <span className={`absolute top-2 left-2 z-10 px-2.5 py-1 rounded-lg text-[11px] font-bold ${badgeClass}`}>
+            {badgeLabel}
+          </span>
+        )}
+      </div>
 
-          {/* Wishlist heart – customer mode only */}
-          {!sellerMode && <WishlistButton productId={id} variant="card" />}
-        </div>
-      </Link>
-
-      {/* Product info - simple like 당근 */}
+      {/* Product info */}
       <div className="pt-3 pb-5">
-        <Link href={`/p/${id}`}>
+        <Link href={sellerMode ? `/seller/products/${id}/edit` : `/p/${id}`}>
           <h3 className="text-[15px] font-medium text-gray-900 leading-snug line-clamp-2">
             {title}
           </h3>
@@ -101,17 +106,25 @@ export default function ProductCard({
           </Link>
         )}
 
-        {/* Seller actions */}
+        {/* Seller mode: stock info + actions */}
         {sellerMode && (
-          <div className="mt-3 flex gap-2">
-            {!isDeleted && <ToggleActiveButton productId={id} isActive={isActive ?? true} />}
-            <Link
-              href={`/seller/products/${id}/edit`}
-              className="flex-1 h-9 flex items-center justify-center rounded-lg border border-gray-200 text-[13px] font-medium text-gray-700 active:bg-gray-50 transition-colors"
-            >
-              수정
-            </Link>
-          </div>
+          <>
+            <div className="mt-1.5 text-[13px] text-gray-500">
+              재고 {stock}
+              {variantSummary && (
+                <span className="ml-1.5 text-gray-400">({variantSummary})</span>
+              )}
+            </div>
+            <div className="mt-3 flex gap-2">
+              {!isDeleted && <ToggleActiveButton productId={id} isActive={isActive ?? true} />}
+              <Link
+                href={`/seller/products/${id}/edit`}
+                className="flex-1 h-9 flex items-center justify-center rounded-lg border border-gray-200 text-[13px] font-medium text-gray-700 active:bg-gray-50 transition-colors"
+              >
+                수정
+              </Link>
+            </div>
+          </>
         )}
       </div>
     </article>

@@ -46,7 +46,6 @@ export default function WishlistPage() {
   useEffect(() => {
     fetchProducts();
 
-    // Re-fetch when wishlist changes (e.g. user un-hearts from this page)
     const handler = () => {
       setIsLoading(true);
       fetchProducts();
@@ -88,7 +87,7 @@ export default function WishlistPage() {
                 id={product.id}
                 title={product.title}
                 priceKrw={product.priceKrw}
-                imageUrl={product.images[0]?.url ?? null}
+                images={product.images.map((i) => ({ url: i.url }))}
                 shopName={product.seller.sellerProfile?.shopName ?? "알수없음"}
                 sellerId={product.sellerId}
               />

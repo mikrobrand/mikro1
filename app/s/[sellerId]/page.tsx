@@ -21,7 +21,7 @@ export default async function SellerShopPage({ params }: Props) {
     where: { sellerId, status: "ACTIVE", isActive: true, isDeleted: false },
     orderBy: { createdAt: "desc" },
     include: {
-      images: { orderBy: { sortOrder: "asc" }, take: 1 },
+      images: { where: { kind: "MAIN" }, orderBy: { sortOrder: "asc" } },
       seller: { include: { sellerProfile: true } },
     },
   });
@@ -67,7 +67,7 @@ export default async function SellerShopPage({ params }: Props) {
             id={product.id}
             title={product.title}
             priceKrw={product.priceKrw}
-            imageUrl={product.images[0]?.url ?? null}
+            images={product.images.map((i) => ({ url: i.url }))}
             shopName={profile.shopName}
             sellerId={sellerId}
           />
