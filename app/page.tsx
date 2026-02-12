@@ -25,7 +25,6 @@ export default async function HomePage({ searchParams }: Props) {
 
   const products = await prisma.product.findMany({
     where: {
-      status: "ACTIVE",
       isActive: true,
       isDeleted: false,
       ...(dbCategory ? { category: dbCategory } : {}),

@@ -20,12 +20,11 @@ export default async function ProductDetailPage({ params }: Props) {
     },
   });
 
-  if (!product || product.isDeleted) notFound();
+  if (!product || product.isDeleted || !product.isActive) notFound();
 
   const shopName = product.seller.sellerProfile?.shopName ?? "알수없음";
   const totalStock = product.variants.reduce((sum, v) => sum + v.stock, 0);
   const isSoldOut = totalStock <= 0;
-  const isDisabled = isSoldOut || !product.isActive;
 
   // Split images by kind
   const mainImages = product.images.filter((i) => i.kind === "MAIN");
@@ -120,7 +119,7 @@ export default async function ProductDetailPage({ params }: Props) {
         <div className="mt-8 flex gap-3">
           <button
             className="flex-1 h-[52px] bg-black text-white rounded-xl text-[16px] font-bold active:bg-gray-800 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
-            disabled={isDisabled}
+            disabled={isSoldOut}
           >
             {isSoldOut ? "품절" : "구매하기"}
           </button>

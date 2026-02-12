@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { formatKrw } from "@/lib/format";
+import { getProductBadge } from "@/lib/productState";
 import ToggleActiveButton from "@/components/ToggleActiveButton";
 import WishlistButton from "@/components/WishlistButton";
 import ImageCarousel from "@/components/ImageCarousel";
@@ -42,19 +43,19 @@ export default function ProductCard({
   let badgeLabel = "";
   let badgeClass = "";
   if (sellerMode) {
-    if (isDeleted) {
-      badgeLabel = "삭제됨";
-      badgeClass = "bg-red-500 text-white";
-    } else if (isSoldOut) {
-      badgeLabel = "품절";
-      badgeClass = "bg-orange-500 text-white";
-    } else if (isActive) {
-      badgeLabel = "판매중";
-      badgeClass = "bg-green-500 text-white";
-    } else {
-      badgeLabel = "숨김";
-      badgeClass = "bg-gray-500 text-white";
-    }
+    const badge = getProductBadge({
+      isActive: isActive ?? true,
+      isDeleted: isDeleted ?? false,
+      totalStock: stock,
+    });
+    const badgeMap = {
+      DELETED:  { label: "삭제됨", cls: "bg-red-500 text-white" },
+      HIDDEN:   { label: "숨김",   cls: "bg-gray-500 text-white" },
+      SOLD_OUT: { label: "품절",   cls: "bg-orange-500 text-white" },
+      ACTIVE:   { label: "판매중", cls: "bg-green-500 text-white" },
+    } as const;
+    badgeLabel = badgeMap[badge].label;
+    badgeClass = badgeMap[badge].cls;
   }
 
   const dimmed = sellerMode && (isDeleted || !isActive || isSoldOut);

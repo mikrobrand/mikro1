@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Suspense } from "react";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
+import { getTotalStock, getProductBadge } from "@/lib/productState";
 import ProductCard from "@/components/ProductCard";
 import SellerProductFilter from "@/components/SellerProductFilter";
 
@@ -42,20 +43,17 @@ export default async function SellerDashboardPage({ searchParams }: Props) {
 
   // Compute total stock per product
   const productsWithStock = allProducts.map((p) => {
-    const totalStock = p.variants.reduce((sum, v) => sum + v.stock, 0);
+    const stock = getTotalStock(p.variants);
     const variantSummary = buildVariantSummary(p.variants);
-    return { ...p, totalStock, variantSummary };
+    return { ...p, totalStock: stock, variantSummary };
   });
 
-  // Counts
-  const activeCount = productsWithStock.filter(
-    (p) => p.isActive && !p.isDeleted && p.totalStock > 0,
-  ).length;
-  const hiddenCount = productsWithStock.filter((p) => !p.isActive && !p.isDeleted).length;
-  const soldOutCount = productsWithStock.filter(
-    (p) => !p.isDeleted && p.isActive && p.totalStock <= 0,
-  ).length;
-  const deletedCount = productsWithStock.filter((p) => p.isDeleted).length;
+  // Counts via single-source badge
+  const counts = { ACTIVE: 0, HIDDEN: 0, SOLD_OUT: 0, DELETED: 0 };
+  for (const p of productsWithStock) {
+    counts[getProductBadge({ isActive: p.isActive, isDeleted: p.isDeleted, totalStock: p.totalStock })]++;
+  }
+  const { ACTIVE: activeCount, HIDDEN: hiddenCount, SOLD_OUT: soldOutCount, DELETED: deletedCount } = counts;
 
   // Filter based on toggles
   const products = productsWithStock.filter((p) => {

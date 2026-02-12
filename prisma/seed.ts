@@ -1,5 +1,5 @@
 import "dotenv/config";
-import { PrismaClient, UserRole, SellerApprovalStatus, ProductStatus } from "@prisma/client";
+import { PrismaClient, UserRole, SellerApprovalStatus } from "@prisma/client";
 import { Pool } from "pg";
 import { PrismaPg } from "@prisma/adapter-pg";
 
@@ -52,11 +52,17 @@ async function main() {
     },
   });
 
-  // Sellers
+  // Sellers — first seller uses MVP_SELLER_ID so login (s/s) always works
+  const mvpSellerId = process.env.MVP_SELLER_ID;
+  if (!mvpSellerId) {
+    throw new Error("MVP_SELLER_ID env var is required for seeding");
+  }
+
   const sellers = await Promise.all(
     ["동대문A", "동대문B", "동대문C"].map((shopName, i) =>
       prisma.user.create({
         data: {
+          ...(i === 0 ? { id: mvpSellerId } : {}),
           email: `seller${i + 1}@mikro.local`,
           name: `Seller${i + 1}`,
           role: UserRole.SELLER_ACTIVE,
@@ -152,7 +158,6 @@ async function main() {
         description: "MVP 목데이터 상품입니다. 실제 설명은 판매자가 입력합니다.",
         category,
         priceKrw: price,
-        status: ProductStatus.ACTIVE,
         images: {
           create: [
             // MAIN images

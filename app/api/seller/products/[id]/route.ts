@@ -71,7 +71,6 @@ export async function PATCH(req: NextRequest, { params }: Params) {
       category,
       description,
       isActive,
-      isDeleted,
       mainImages,
       contentImages,
       variants,
@@ -81,7 +80,6 @@ export async function PATCH(req: NextRequest, { params }: Params) {
       category?: string;
       description?: string;
       isActive?: boolean;
-      isDeleted?: boolean;
       mainImages?: string[];
       contentImages?: string[];
       variants?: { sizeLabel: string; stock: number }[];
@@ -115,9 +113,6 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     }
     if (isActive !== undefined) {
       productData.isActive = Boolean(isActive);
-    }
-    if (isDeleted !== undefined) {
-      productData.isDeleted = Boolean(isDeleted);
     }
 
     // ---- Validate images ----
@@ -215,7 +210,6 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     return NextResponse.json({
       id: updated.id,
       isActive: updated.isActive,
-      isDeleted: updated.isDeleted,
     });
   } catch (err) {
     console.error("product update error:", err);
@@ -225,7 +219,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
 
 /* ------------------------------------------------------------------ */
 /*  DELETE /api/seller/products/[id]                                    */
-/*  Hard delete: cascades images + variants                            */
+/*  Soft delete: sets isDeleted=true                                   */
 /* ------------------------------------------------------------------ */
 export async function DELETE(_req: NextRequest, { params }: Params) {
   try {
@@ -242,18 +236,11 @@ export async function DELETE(_req: NextRequest, { params }: Params) {
       return NextResponse.json({ error: "상품을 찾을 수 없습니다" }, { status: 404 });
     }
 
-    // Check if there are any orders linked to this product
-    const orderCount = await prisma.orderItem.count({ where: { productId: id } });
-    if (orderCount > 0) {
-      // Soft delete instead to preserve order history
-      await prisma.product.update({ where: { id }, data: { isDeleted: true, isActive: false } });
-      return NextResponse.json({ id, deleted: "soft", reason: "주문 내역이 존재하여 소프트 삭제 처리됨" });
-    }
+    // Always soft delete
+    // TODO: 추후 주문 연동 시 hard delete 정책 확장 가능
+    await prisma.product.update({ where: { id }, data: { isDeleted: true } });
 
-    // Hard delete (cascade handles images + variants)
-    await prisma.product.delete({ where: { id } });
-
-    return NextResponse.json({ id, deleted: "hard" });
+    return NextResponse.json({ id, deleted: "soft" });
   } catch (err) {
     console.error("product delete error:", err);
     return NextResponse.json({ error: "상품 삭제에 실패했습니다" }, { status: 500 });

@@ -19,12 +19,6 @@ enum SellerApprovalStatus {
   REJECTED
 }
 
-enum ProductStatus {
-  ACTIVE
-  SOLD_OUT
-  HIDDEN
-}
-
 enum OrderStatus {
   PENDING
   PAYMENT_FAILED
@@ -98,7 +92,6 @@ model Product {
   description String?
   category    String?       // 바지/아우터 등 (MVP는 string)
   priceKrw    Int
-  status      ProductStatus @default(ACTIVE)
   isActive    Boolean       @default(true)
   isDeleted   Boolean       @default(false)
 

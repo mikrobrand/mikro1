@@ -79,7 +79,6 @@ export async function POST(req: NextRequest) {
           priceKrw,
           category: category?.trim() || null,
           description: description?.trim() || null,
-          status: "ACTIVE",
         },
       });
 
