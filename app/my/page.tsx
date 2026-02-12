@@ -88,6 +88,14 @@ export default async function MyPage() {
           )}
 
           <Link
+            href="/info"
+            className="py-4 border-b border-gray-50 text-[15px] text-gray-800 flex items-center justify-between"
+          >
+            사업자 정보
+            {chevronSvg}
+          </Link>
+
+          <Link
             href="/policy/terms"
             className="py-4 border-b border-gray-50 text-[15px] text-gray-800 flex items-center justify-between"
           >
@@ -100,6 +108,14 @@ export default async function MyPage() {
             className="py-4 border-b border-gray-50 text-[15px] text-gray-800 flex items-center justify-between"
           >
             개인정보처리방침
+            {chevronSvg}
+          </Link>
+
+          <Link
+            href="/policy/returns"
+            className="py-4 border-b border-gray-50 text-[15px] text-gray-800 flex items-center justify-between"
+          >
+            환불·교환·반품·배송 정책
             {chevronSvg}
           </Link>
         </div>

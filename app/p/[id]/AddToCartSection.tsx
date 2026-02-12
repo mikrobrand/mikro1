@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { addToCart } from "@/lib/cart";
 import { useRouter } from "next/navigation";
 
 interface Variant {
@@ -28,10 +27,11 @@ export default function AddToCartSection({
   );
   const [quantity, setQuantity] = useState(1);
   const [message, setMessage] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
 
   const selectedVariant = variants.find((v) => v.id === selectedVariantId);
 
-  const handleAddToCart = () => {
+  const handleAddToCart = async () => {
     if (!selectedVariantId) {
       setMessage("사이즈를 선택해주세요");
       setTimeout(() => setMessage(null), 2000);
@@ -46,9 +46,36 @@ export default function AddToCartSection({
       return;
     }
 
-    addToCart({ productId, variantId: selectedVariantId, quantity });
-    setMessage("장바구니에 담았습니다");
-    setTimeout(() => setMessage(null), 2000);
+    try {
+      setLoading(true);
+
+      const res = await fetch("/api/cart", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ variantId: selectedVariantId, quantity }),
+      });
+
+      const data = await res.json();
+
+      if (res.status === 401) {
+        // Not logged in - redirect to login with return URL
+        const currentPath = window.location.pathname;
+        router.push(`/login?next=${encodeURIComponent(currentPath)}`);
+        return;
+      }
+
+      if (!res.ok) {
+        throw new Error(data.error || "장바구니 담기 실패");
+      }
+
+      setMessage("장바구니에 담았습니다");
+      setTimeout(() => setMessage(null), 2000);
+    } catch (err: any) {
+      setMessage(err.message || "오류가 발생했습니다");
+      setTimeout(() => setMessage(null), 3000);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleGoToCart = () => {
@@ -141,10 +168,10 @@ export default function AddToCartSection({
         <button
           type="button"
           onClick={handleAddToCart}
-          disabled={isSoldOut || !selectedVariantId}
+          disabled={isSoldOut || !selectedVariantId || loading}
           className="flex-1 h-[52px] bg-black text-white rounded-xl text-[16px] font-bold active:bg-gray-800 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
         >
-          {isSoldOut ? "품절" : "장바구니 담기"}
+          {loading ? "처리 중..." : isSoldOut ? "품절" : "장바구니 담기"}
         </button>
         <button
           type="button"

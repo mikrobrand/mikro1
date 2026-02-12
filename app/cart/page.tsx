@@ -4,27 +4,28 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import Container from "@/components/Container";
-import { getCart, updateQuantity, removeItem, clearCart } from "@/lib/cart";
 import { formatKrw } from "@/lib/format";
 
 interface CartItemData {
-  productId: string;
+  id: string;
   variantId: string;
   quantity: number;
-  product?: {
-    id: string;
-    title: string;
-    priceKrw: number;
-    images: { url: string }[];
-    sellerId: string;
-    seller: {
-      sellerProfile: { shopName: string } | null;
-    };
-  };
-  variant?: {
+  variant: {
     id: string;
     sizeLabel: string;
     stock: number;
+    product: {
+      id: string;
+      title: string;
+      priceKrw: number;
+      sellerId: string;
+      isActive: boolean;
+      isDeleted: boolean;
+      images: { url: string }[];
+      seller: {
+        sellerProfile: { shopName: string } | null;
+      };
+    };
   };
 }
 
@@ -41,94 +42,117 @@ export default function CartPage() {
   const loadCart = async () => {
     try {
       setLoading(true);
-      const cart = getCart();
+      setError(null);
 
-      if (cart.length === 0) {
-        setItems([]);
-        setLoading(false);
+      const res = await fetch("/api/cart");
+
+      if (res.status === 401) {
+        router.push("/login");
         return;
       }
 
-      // Fetch product details
-      const productIds = [...new Set(cart.map((i) => i.productId))];
-      const res = await fetch("/api/products/by-ids", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ids: productIds }),
-      });
+      if (!res.ok) {
+        throw new Error("장바구니를 불러오는데 실패했습니다");
+      }
 
-      if (!res.ok) throw new Error("Failed to fetch products");
-
-      const products = await res.json();
-
-      // Merge cart with product data
-      const merged: CartItemData[] = cart
-        .map((item) => {
-          const product = products.find((p: any) => p.id === item.productId);
-          if (!product) return null;
-
-          const variant = product.variants?.find(
-            (v: any) => v.id === item.variantId
-          );
-          if (!variant) return null;
-
-          return {
-            ...item,
-            product,
-            variant,
-          };
-        })
-        .filter(Boolean) as CartItemData[];
-
-      setItems(merged);
+      const data = await res.json();
+      setItems(data);
     } catch (err: any) {
       console.error("Failed to load cart:", err);
-      setError("장바구니를 불러오는데 실패했습니다");
+      setError(err.message || "장바구니를 불러오는데 실패했습니다");
     } finally {
       setLoading(false);
     }
   };
 
-  const handleUpdateQuantity = (
-    productId: string,
-    variantId: string,
-    delta: number
+  const handleUpdateQuantity = async (
+    cartItemId: string,
+    newQuantity: number,
+    maxStock: number
   ) => {
-    const item = items.find(
-      (i) => i.productId === productId && i.variantId === variantId
-    );
-    if (!item) return;
-
-    const newQuantity = item.quantity + delta;
     if (newQuantity <= 0) {
-      handleRemove(productId, variantId);
+      handleRemove(cartItemId);
       return;
     }
 
-    const maxStock = item.variant?.stock ?? 0;
     if (newQuantity > maxStock) {
       alert(`최대 ${maxStock}개까지 구매 가능합니다`);
       return;
     }
 
-    updateQuantity(productId, variantId, newQuantity);
+    // Optimistic update
+    const prevItems = [...items];
     setItems((prev) =>
       prev.map((i) =>
-        i.productId === productId && i.variantId === variantId
-          ? { ...i, quantity: newQuantity }
-          : i
+        i.id === cartItemId ? { ...i, quantity: newQuantity } : i
       )
     );
+
+    try {
+      const res = await fetch(`/api/cart/${cartItemId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ quantity: newQuantity }),
+      });
+
+      if (res.status === 401) {
+        router.push("/login");
+        return;
+      }
+
+      if (res.status === 409) {
+        const data = await res.json();
+        // Rollback on stock conflict
+        setItems(prevItems);
+        alert(data.error || "재고가 부족합니다");
+        // Reload to get fresh stock data
+        await loadCart();
+        return;
+      }
+
+      if (!res.ok) {
+        throw new Error("수량 변경에 실패했습니다");
+      }
+
+      const data = await res.json();
+      // Update with server response
+      setItems((prev) =>
+        prev.map((i) => (i.id === cartItemId ? data.item : i))
+      );
+    } catch (err: any) {
+      // Rollback on error
+      setItems(prevItems);
+      setError(err.message || "수량 변경에 실패했습니다");
+      setTimeout(() => setError(null), 3000);
+    }
   };
 
-  const handleRemove = (productId: string, variantId: string) => {
+  const handleRemove = async (cartItemId: string) => {
     if (!confirm("이 상품을 장바구니에서 삭제하시겠습니까?")) return;
-    removeItem(productId, variantId);
-    setItems((prev) =>
-      prev.filter(
-        (i) => !(i.productId === productId && i.variantId === variantId)
-      )
-    );
+
+    // Optimistic update
+    const prevItems = [...items];
+    setItems((prev) => prev.filter((i) => i.id !== cartItemId));
+
+    try {
+      const res = await fetch(`/api/cart/${cartItemId}`, {
+        method: "DELETE",
+      });
+
+      if (res.status === 401) {
+        router.push("/login");
+        return;
+      }
+
+      if (!res.ok) {
+        throw new Error("상품 삭제에 실패했습니다");
+      }
+    } catch (err: any) {
+      // Rollback on error
+      setItems(prevItems);
+      setError(err.message || "상품 삭제에 실패했습니다");
+      setTimeout(() => setError(null), 3000);
+    }
   };
 
   const handleGoToCheckout = () => {
@@ -137,7 +161,7 @@ export default function CartPage() {
   };
 
   const totalAmount = items.reduce((sum, item) => {
-    const price = item.product?.priceKrw ?? 0;
+    const price = item.variant.product.priceKrw;
     return sum + price * item.quantity;
   }, 0);
 
@@ -177,9 +201,8 @@ export default function CartPage() {
         {/* Cart items */}
         <div className="space-y-4">
           {items.map((item) => {
-            const product = item.product;
+            const product = item.variant.product;
             const variant = item.variant;
-            if (!product || !variant) return null;
 
             const shopName =
               product.seller.sellerProfile?.shopName ?? "알수없음";
@@ -188,24 +211,39 @@ export default function CartPage() {
               variant.sizeLabel === "FREE" ? "FREE" : variant.sizeLabel;
             const subtotal = product.priceKrw * item.quantity;
 
+            // Check if product is unavailable
+            const isUnavailable = product.isDeleted || !product.isActive;
+
             return (
               <div
-                key={`${item.productId}-${item.variantId}`}
-                className="flex gap-4 p-4 bg-white rounded-xl border border-gray-100"
+                key={item.id}
+                className={`flex gap-4 p-4 bg-white rounded-xl border ${
+                  isUnavailable
+                    ? "border-red-200 bg-red-50"
+                    : "border-gray-100"
+                }`}
               >
                 {/* Image */}
                 <Link href={`/p/${product.id}`}>
                   <img
                     src={imageUrl}
                     alt={product.title}
-                    className="w-20 h-20 rounded-lg object-cover"
+                    className={`w-20 h-20 rounded-lg object-cover ${
+                      isUnavailable ? "opacity-50" : ""
+                    }`}
                   />
                 </Link>
 
                 {/* Info */}
                 <div className="flex-1 min-w-0">
                   <Link href={`/p/${product.id}`}>
-                    <h3 className="text-[16px] font-bold text-black truncate">
+                    <h3
+                      className={`text-[16px] font-bold truncate ${
+                        isUnavailable
+                          ? "text-gray-400 line-through"
+                          : "text-black"
+                      }`}
+                    >
                       {product.title}
                     </h3>
                   </Link>
@@ -213,45 +251,74 @@ export default function CartPage() {
                   <p className="text-[13px] text-gray-600 mt-1">
                     사이즈: {sizeLabel}
                   </p>
-                  <p className="text-[16px] font-bold text-black mt-2">
+
+                  {isUnavailable && (
+                    <p className="text-[13px] text-red-600 font-medium mt-1">
+                      현재 구매할 수 없는 상품입니다
+                    </p>
+                  )}
+
+                  <p
+                    className={`text-[16px] font-bold mt-2 ${
+                      isUnavailable ? "text-gray-400" : "text-black"
+                    }`}
+                  >
                     {formatKrw(subtotal)}
                   </p>
 
                   {/* Quantity controls */}
-                  <div className="mt-3 flex items-center gap-3">
-                    <button
-                      type="button"
-                      onClick={() =>
-                        handleUpdateQuantity(
-                          item.productId,
-                          item.variantId,
-                          -1
-                        )
-                      }
-                      className="w-8 h-8 rounded-full bg-gray-100 text-gray-700 font-bold text-[14px] active:bg-gray-200 transition-colors"
-                    >
-                      −
-                    </button>
-                    <span className="text-[14px] font-medium text-black min-w-[2ch] text-center">
-                      {item.quantity}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        handleUpdateQuantity(item.productId, item.variantId, 1)
-                      }
-                      className="w-8 h-8 rounded-full bg-gray-100 text-gray-700 font-bold text-[14px] active:bg-gray-200 transition-colors"
-                    >
-                      +
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleRemove(item.productId, item.variantId)}
-                      className="ml-auto text-[13px] text-gray-500 hover:text-red-500 transition-colors"
-                    >
-                      삭제
-                    </button>
-                  </div>
+                  {!isUnavailable && (
+                    <div className="mt-3 flex items-center gap-3">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          handleUpdateQuantity(
+                            item.id,
+                            item.quantity - 1,
+                            variant.stock
+                          )
+                        }
+                        className="w-8 h-8 rounded-full bg-gray-100 text-gray-700 font-bold text-[14px] active:bg-gray-200 transition-colors"
+                      >
+                        −
+                      </button>
+                      <span className="text-[14px] font-medium text-black min-w-[2ch] text-center">
+                        {item.quantity}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          handleUpdateQuantity(
+                            item.id,
+                            item.quantity + 1,
+                            variant.stock
+                          )
+                        }
+                        className="w-8 h-8 rounded-full bg-gray-100 text-gray-700 font-bold text-[14px] active:bg-gray-200 transition-colors"
+                      >
+                        +
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleRemove(item.id)}
+                        className="ml-auto text-[13px] text-gray-500 hover:text-red-500 transition-colors"
+                      >
+                        삭제
+                      </button>
+                    </div>
+                  )}
+
+                  {isUnavailable && (
+                    <div className="mt-3">
+                      <button
+                        type="button"
+                        onClick={() => handleRemove(item.id)}
+                        className="text-[13px] text-red-600 font-medium hover:text-red-700 transition-colors"
+                      >
+                        장바구니에서 삭제
+                      </button>
+                    </div>
+                  )}
                 </div>
               </div>
             );
@@ -281,7 +348,10 @@ export default function CartPage() {
         <button
           type="button"
           onClick={handleGoToCheckout}
-          className="mt-6 w-full h-[56px] bg-black text-white rounded-xl text-[18px] font-bold active:bg-gray-800 transition-colors"
+          disabled={items.some(
+            (i) => i.variant.product.isDeleted || !i.variant.product.isActive
+          )}
+          className="mt-6 w-full h-[56px] bg-black text-white rounded-xl text-[18px] font-bold active:bg-gray-800 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
         >
           결제하기
         </button>

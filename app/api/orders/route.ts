@@ -17,6 +17,7 @@ interface CreateOrderAddress {
   zipCode: string;
   addr1: string;
   addr2?: string;
+  memo?: string;
 }
 
 interface CreateOrderRequest {
@@ -147,6 +148,9 @@ export async function POST(request: Request) {
 
         const totalPayKrw = totalAmountKrw + calculatedShippingFee;
 
+        // Set expiration: 30 minutes from now
+        const expiresAt = new Date(Date.now() + 30 * 60 * 1000);
+
         // Order 생성
         const order = await tx.order.create({
           data: {
@@ -155,6 +159,7 @@ export async function POST(request: Request) {
             sellerId,
             status: "PENDING",
             totalAmountKrw,
+            itemsSubtotalKrw: totalAmountKrw,
             shippingFeeKrw: calculatedShippingFee,
             totalPayKrw,
             shipToName: body.address?.name,
@@ -162,6 +167,8 @@ export async function POST(request: Request) {
             shipToZip: body.address?.zipCode,
             shipToAddr1: body.address?.addr1,
             shipToAddr2: body.address?.addr2,
+            shipToMemo: body.address?.memo,
+            expiresAt,
             items: {
               create: orderItemsData,
             },

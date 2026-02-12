@@ -61,8 +61,25 @@ model User {
   products      Product[]      @relation("SellerProducts")
   orders        Order[]        @relation("BuyerOrders")
   addresses     Address[]
+  cartItems     CartItem[]
 
   salesOrders   Order[] @relation("SellerOrders")
+}
+
+model CartItem {
+  id        String   @id @default(cuid())
+  userId    String
+  variantId String
+  quantity  Int
+
+  user    User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  variant ProductVariant @relation(fields: [variantId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, variantId])
+  @@index([userId])
 }
 
 model Address {
@@ -151,6 +168,7 @@ model ProductVariant {
   sku       String? @unique
 
   orderItems OrderItem[] @relation("VariantOrderItems")
+  cartItems  CartItem[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -170,16 +188,19 @@ model Order {
   sellerId     String
   seller       User        @relation("SellerOrders", fields: [sellerId], references: [id], onDelete: Restrict)
 
-  totalAmountKrw Int
-  shippingFeeKrw Int @default(0)
-  totalPayKrw    Int @default(0)
+  totalAmountKrw   Int
+  itemsSubtotalKrw Int @default(0)
+  shippingFeeKrw   Int @default(0)
+  totalPayKrw      Int @default(0)
 
   shipToName   String?
   shipToPhone  String?
   shipToZip    String?
   shipToAddr1  String?
   shipToAddr2  String?
+  shipToMemo   String?
 
+  expiresAt    DateTime?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 

@@ -76,6 +76,15 @@ export async function POST(request: Request) {
           throw new Error(`Order ${orderId} is not in PENDING status`);
         }
 
+        // Check expiration
+        if (order.expiresAt && new Date() > order.expiresAt) {
+          await tx.order.update({
+            where: { id: order.id },
+            data: { status: "CANCELLED" },
+          });
+          throw new Error("ORDER_EXPIRED");
+        }
+
         orders.push(order);
       }
 
@@ -102,29 +111,14 @@ export async function POST(request: Request) {
           }
         }
 
-        let totalAmountKrw = 0;
-        for (const item of order.items) {
-          totalAmountKrw += item.unitPriceKrw * item.quantity;
-        }
-
-        const sellerProfile = order.seller.sellerProfile;
-        const shippingFeeKrw = sellerProfile?.shippingFeeKrw || 3000;
-        const freeShippingThreshold = sellerProfile?.freeShippingThreshold || 50000;
-
-        let calculatedShippingFee = shippingFeeKrw;
-        if (totalAmountKrw >= freeShippingThreshold) {
-          calculatedShippingFee = 0;
-        }
-
-        const totalPayKrw = totalAmountKrw + calculatedShippingFee;
+        // Use immutable snapshots - NO recalculation
+        // All pricing is already stored in the order at creation time
 
         await tx.order.update({
           where: { id: order.id },
           data: {
             status: "PAID",
-            totalAmountKrw,
-            shippingFeeKrw: calculatedShippingFee,
-            totalPayKrw,
+            expiresAt: null, // Clear expiration for paid orders
           },
         });
 
@@ -141,7 +135,7 @@ export async function POST(request: Request) {
             data: {
               orderId: order.id,
               status: "DONE",
-              amountKrw: totalPayKrw,
+              amountKrw: order.totalPayKrw, // Use snapshot from order
               method: "TEST_SIMULATION",
               approvedAt: new Date(),
             },
@@ -154,6 +148,13 @@ export async function POST(request: Request) {
 
     return NextResponse.json(result);
   } catch (error: any) {
+    if (error.message.includes("ORDER_EXPIRED")) {
+      return NextResponse.json(
+        { error: "ORDER_EXPIRED: 주문 시간이 만료되었습니다" },
+        { status: 410 }
+      );
+    }
+
     if (error.message.includes("OUT_OF_STOCK")) {
       return NextResponse.json(
         { error: error.message },

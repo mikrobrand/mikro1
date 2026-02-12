@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import Container from "@/components/Container";
-import { getCart, clearCart } from "@/lib/cart";
 import { formatKrw } from "@/lib/format";
 
 interface Address {
@@ -18,11 +17,30 @@ interface Address {
 }
 
 interface CartItemData {
-  productId: string;
+  id: string;
   variantId: string;
   quantity: number;
-  product?: any;
-  variant?: any;
+  variant: {
+    id: string;
+    sizeLabel: string;
+    stock: number;
+    product: {
+      id: string;
+      title: string;
+      priceKrw: number;
+      sellerId: string;
+      isActive: boolean;
+      isDeleted: boolean;
+      images: { url: string }[];
+      seller: {
+        sellerProfile: {
+          shopName: string;
+          shippingFeeKrw: number;
+          freeShippingThreshold: number;
+        } | null;
+      };
+    };
+  };
 }
 
 interface SellerGroup {
@@ -55,7 +73,19 @@ export default function CheckoutPage() {
       setLoading(true);
       setError(null);
 
-      const cart = getCart();
+      // Load cart from API
+      const cartRes = await fetch("/api/cart");
+      if (cartRes.status === 401) {
+        router.push("/login");
+        return;
+      }
+
+      if (!cartRes.ok) {
+        throw new Error("장바구니를 불러오는데 실패했습니다");
+      }
+
+      const cart = await cartRes.json();
+
       if (cart.length === 0) {
         router.push("/cart");
         return;
@@ -77,69 +107,38 @@ export default function CheckoutPage() {
       const defaultAddr = addressesData.find((a: Address) => a.isDefault);
       setSelectedAddress(defaultAddr || null);
 
-      // Load product details
-      const productIds = [...new Set(cart.map((i) => i.productId))];
-      const productsRes = await fetch("/api/products/by-ids", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ids: productIds }),
-      });
-
-      if (!productsRes.ok) throw new Error("Failed to load products");
-
-      const products = await productsRes.json();
-
-      // Merge cart with product data
-      const merged: CartItemData[] = cart
-        .map((item) => {
-          const product = products.find((p: any) => p.id === item.productId);
-          if (!product) return null;
-
-          const variant = product.variants?.find(
-            (v: any) => v.id === item.variantId
-          );
-          if (!variant) return null;
-
-          return {
-            ...item,
-            product,
-            variant,
-          };
-        })
-        .filter(Boolean) as CartItemData[];
-
       // Validate products
-      for (const item of merged) {
-        if (!item.product || !item.variant) {
-          throw new Error("일부 상품 정보를 찾을 수 없습니다");
-        }
+      for (const item of cart) {
+        const product = item.variant.product;
+        const variant = item.variant;
 
-        if (item.product.isDeleted || !item.product.isActive) {
+        if (product.isDeleted || !product.isActive) {
           throw new Error(
-            `${item.product.title}은(는) 현재 구매할 수 없습니다`
+            `${product.title}은(는) 현재 구매할 수 없습니다`
           );
         }
 
-        if (item.quantity > item.variant.stock) {
+        if (item.quantity > variant.stock) {
           throw new Error(
-            `${item.product.title} (${item.variant.sizeLabel})의 재고가 부족합니다 (요청: ${item.quantity}, 재고: ${item.variant.stock})`
+            `${product.title} (${variant.sizeLabel})의 재고가 부족합니다 (요청: ${item.quantity}, 재고: ${variant.stock})`
           );
         }
       }
 
-      setItems(merged);
+      setItems(cart);
 
       // Group by seller
       const groups = new Map<string, SellerGroup>();
 
-      for (const item of merged) {
-        const sellerId = item.product.sellerId;
+      for (const item of cart) {
+        const product = item.variant.product;
+        const sellerId = product.sellerId;
         const shopName =
-          item.product.seller?.sellerProfile?.shopName || "알수없음";
+          product.seller?.sellerProfile?.shopName || "알수없음";
         const shippingFeeKrw =
-          item.product.seller?.sellerProfile?.shippingFeeKrw || 3000;
+          product.seller?.sellerProfile?.shippingFeeKrw || 3000;
         const freeShippingThreshold =
-          item.product.seller?.sellerProfile?.freeShippingThreshold || 50000;
+          product.seller?.sellerProfile?.freeShippingThreshold || 50000;
 
         if (!groups.has(sellerId)) {
           groups.set(sellerId, {
@@ -154,7 +153,7 @@ export default function CheckoutPage() {
 
         const group = groups.get(sellerId)!;
         group.items.push(item);
-        group.subtotal += item.product.priceKrw * item.quantity;
+        group.subtotal += product.priceKrw * item.quantity;
       }
 
       // Calculate shipping fees
@@ -184,7 +183,7 @@ export default function CheckoutPage() {
       setError(null);
 
       const orderItems = items.map((i) => ({
-        productId: i.productId,
+        productId: i.variant.product.id,
         variantId: i.variantId,
         quantity: i.quantity,
       }));
@@ -240,16 +239,18 @@ export default function CheckoutPage() {
       const data = await res.json();
 
       if (!res.ok) {
+        if (res.status === 410) {
+          throw new Error("주문 시간이 만료되었습니다. 장바구니로 돌아가서 다시 진행해 주세요.");
+        }
         throw new Error(data.error || "결제 처리 실패");
       }
 
-      clearCart();
+      // Clear cart via API
+      await fetch("/api/cart", { method: "DELETE" });
 
-      if (orderIds.length === 1) {
-        router.push(`/orders/${orderIds[0]}`);
-      } else {
-        router.push("/");
-      }
+      // Redirect to success page with all order IDs
+      const idsParam = orderIds.join(",");
+      router.push(`/orders/success?ids=${idsParam}`);
     } catch (err: any) {
       setError(err.message || "결제 처리에 실패했습니다");
       setShowPaymentModal(false);
@@ -371,27 +372,26 @@ export default function CheckoutPage() {
 
                 <div className="space-y-3 mb-3">
                   {group.items.map((item) => {
-                    const imageUrl =
-                      item.product.images[0]?.url || "/placeholder.png";
+                    const product = item.variant.product;
+                    const variant = item.variant;
+                    const imageUrl = product.images[0]?.url || "/placeholder.png";
                     const sizeLabel =
-                      item.variant.sizeLabel === "FREE"
-                        ? "FREE"
-                        : item.variant.sizeLabel;
-                    const subtotal = item.product.priceKrw * item.quantity;
+                      variant.sizeLabel === "FREE" ? "FREE" : variant.sizeLabel;
+                    const subtotal = product.priceKrw * item.quantity;
 
                     return (
                       <div
-                        key={`${item.productId}-${item.variantId}`}
+                        key={item.id}
                         className="flex gap-3"
                       >
                         <img
                           src={imageUrl}
-                          alt={item.product.title}
+                          alt={product.title}
                           className="w-16 h-16 rounded-lg object-cover"
                         />
                         <div className="flex-1 min-w-0">
                           <h4 className="text-[14px] font-medium text-black truncate">
-                            {item.product.title}
+                            {product.title}
                           </h4>
                           <p className="text-[13px] text-gray-500">
                             사이즈: {sizeLabel} / 수량: {item.quantity}개
@@ -447,6 +447,12 @@ export default function CheckoutPage() {
               {formatKrw(totalShipping)}
             </span>
           </div>
+          <p className="text-[12px] text-gray-500">
+            배송비는 판매자별 정책이 적용됩니다.{" "}
+            <Link href="/policy/returns" className="text-blue-600 underline">
+              자세히 보기
+            </Link>
+          </p>
           <div className="pt-2 border-t border-gray-200 flex justify-between items-center">
             <span className="text-[16px] font-bold text-black">총 결제 금액</span>
             <span className="text-[24px] font-bold text-black">
@@ -461,6 +467,25 @@ export default function CheckoutPage() {
             {error}
           </div>
         )}
+
+        {/* Policy Notice */}
+        <div className="mb-4 p-3 bg-gray-50 rounded-lg">
+          <p className="text-[12px] text-gray-600 leading-relaxed">
+            결제 진행 시{" "}
+            <Link href="/policy/terms" className="text-blue-600 underline">
+              이용약관
+            </Link>
+            ,{" "}
+            <Link href="/policy/privacy" className="text-blue-600 underline">
+              개인정보처리방침
+            </Link>
+            ,{" "}
+            <Link href="/policy/returns" className="text-blue-600 underline">
+              환불·교환·반품 정책
+            </Link>
+            에 동의한 것으로 간주됩니다.
+          </p>
+        </div>
 
         {/* Payment button */}
         <button
