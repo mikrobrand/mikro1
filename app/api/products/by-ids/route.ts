@@ -19,6 +19,7 @@ export async function POST(request: Request) {
       include: {
         images: { where: { kind: "MAIN" }, orderBy: { sortOrder: "asc" } },
         seller: { include: { sellerProfile: true } },
+        variants: { orderBy: { createdAt: "asc" } },
       },
     });
 

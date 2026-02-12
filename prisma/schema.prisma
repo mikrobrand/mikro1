@@ -28,12 +28,15 @@ enum OrderStatus {
   DELIVERED
   CANCEL_REQUESTED
   CANCELED
+  CANCELLED
   REFUNDED
+  FAILED
 }
 
 enum PaymentStatus {
   READY
   CONFIRMED
+  DONE
   FAILED
   CANCELED
 }
@@ -57,8 +60,27 @@ model User {
   sellerProfile SellerProfile?
   products      Product[]      @relation("SellerProducts")
   orders        Order[]        @relation("BuyerOrders")
+  addresses     Address[]
 
   salesOrders   Order[] @relation("SellerOrders")
+}
+
+model Address {
+  id        String   @id @default(cuid())
+  userId    String
+  name      String
+  phone     String
+  zipCode   String
+  addr1     String
+  addr2     String?
+  isDefault Boolean  @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }
 
 model SellerProfile {
@@ -78,6 +100,9 @@ model SellerProfile {
   bizRegImageUrl String?              // S3 URL
   status         SellerApprovalStatus @default(PENDING)
   rejectedReason String?
+
+  shippingFeeKrw        Int @default(3000)
+  freeShippingThreshold Int @default(50000)
 
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
@@ -147,11 +172,12 @@ model Order {
 
   totalAmountKrw Int
   shippingFeeKrw Int @default(0)
+  totalPayKrw    Int @default(0)
 
-  shipToName   String
-  shipToPhone  String
+  shipToName   String?
+  shipToPhone  String?
   shipToZip    String?
-  shipToAddr1  String
+  shipToAddr1  String?
   shipToAddr2  String?
 
   createdAt    DateTime @default(now())

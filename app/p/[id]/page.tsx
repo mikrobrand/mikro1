@@ -5,6 +5,7 @@ import Container from "@/components/Container";
 import ImageCarousel from "@/components/ImageCarousel";
 import { formatKrw } from "@/lib/format";
 import WishlistButton from "@/components/WishlistButton";
+import AddToCartSection from "./AddToCartSection";
 
 type Props = { params: Promise<{ id: string }> };
 
@@ -68,27 +69,14 @@ export default async function ProductDetailPage({ params }: Props) {
           </span>
         )}
 
-        {/* Variants — size/stock info */}
-        {product.variants.length > 0 && (
-          <div className="mt-4 flex flex-wrap gap-2">
-            {product.variants.map((v) => {
-              const label = v.sizeLabel === "FREE" ? "FREE" : v.sizeLabel;
-              const outOfStock = v.stock <= 0;
-              return (
-                <span
-                  key={v.id}
-                  className={`px-3 py-1.5 rounded-full text-[13px] ${
-                    outOfStock
-                      ? "bg-gray-100 text-gray-400 line-through"
-                      : "bg-gray-100 text-gray-600"
-                  }`}
-                >
-                  {label} ({v.stock})
-                </span>
-              );
-            })}
-          </div>
-        )}
+        {/* Add to cart section */}
+        <div className="mt-6">
+          <AddToCartSection
+            productId={product.id}
+            variants={product.variants}
+            isSoldOut={isSoldOut}
+          />
+        </div>
 
         {/* Description */}
         {product.description && (
@@ -115,14 +103,8 @@ export default async function ProductDetailPage({ params }: Props) {
           </div>
         )}
 
-        {/* CTA */}
-        <div className="mt-8 flex gap-3">
-          <button
-            className="flex-1 h-[52px] bg-black text-white rounded-xl text-[16px] font-bold active:bg-gray-800 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
-            disabled={isSoldOut}
-          >
-            {isSoldOut ? "품절" : "구매하기"}
-          </button>
+        {/* Wishlist button */}
+        <div className="mt-4 flex justify-end">
           <WishlistButton productId={product.id} variant="detail" />
         </div>
       </div>
