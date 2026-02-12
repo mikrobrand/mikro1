@@ -7,11 +7,10 @@ frontend:
         - npm -v
         - npm ci
         - npx prisma generate
-        - echo "DATABASE_URL is set? ${DATABASE_URL:+yes}"
-        - node -e "console.log('DB_HOST=', (process.env.DATABASE_URL||'').split('@')[1]?.split('/')[0] || 'missing')"
+       
     build:
       commands:
-        - env | grep -e DATABASE_URL -e AUTH_SECRET -e MVP_SELLER_ID >> .env
+        - env | grep -e DATABASE_URL -e AUTH_SECRET -e MVP_SELLER_ID -eS3_BUCKET >> .env
         - env | grep -e NEXT_PUBLIC_ >> .env || true
         - npm run build
   artifacts:
