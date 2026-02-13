@@ -24,6 +24,12 @@ export default function InfoPage() {
                 mikrobrand25@gmail.com
               </a>
             </div>
+            <div>
+              <p className="text-[13px] text-gray-600 mb-1">운영 시간</p>
+              <p className="text-[14px] text-black">
+                평일 10:00 - 18:00 (주말 및 공휴일 휴무)
+              </p>
+            </div>
           </div>
         </div>
 
@@ -52,8 +58,24 @@ export default function InfoPage() {
           <h2 className="text-[16px] font-bold text-black mb-3">사업자 정보</h2>
           <div className="space-y-3">
             <div>
+              <p className="text-[13px] text-gray-600 mb-1">상호</p>
+              <p className="text-[14px] text-black font-medium">미크로</p>
+            </div>
+            <div>
+              <p className="text-[13px] text-gray-600 mb-1">대표자</p>
+              <p className="text-[14px] text-black font-medium">김동현</p>
+            </div>
+            <div>
               <p className="text-[13px] text-gray-600 mb-1">사업자등록번호</p>
               <p className="text-[14px] text-black font-medium">443-65-00701</p>
+            </div>
+            <div>
+              <p className="text-[13px] text-gray-600 mb-1">
+                통신판매업 신고번호
+              </p>
+              <p className="text-[14px] text-black font-medium">
+                2025-서울구로-0131
+              </p>
             </div>
             <div>
               <p className="text-[13px] text-gray-600 mb-1">OFFICE</p>

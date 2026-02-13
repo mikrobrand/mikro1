@@ -142,6 +142,26 @@ export default function ReturnsPage() {
           </div>
         </section>
 
+        {/* Policy Application Notice */}
+        <section className="mb-6 p-4 bg-blue-50 rounded-xl border border-blue-100">
+          <h2 className="text-[18px] font-bold text-black mb-3">
+            7. 정책 적용 기준
+          </h2>
+          <div className="space-y-2 text-[14px] text-gray-700 leading-relaxed">
+            <p>
+              • 본 정책은 최종 업데이트 시행일 이후 주문 건부터 적용됩니다.
+            </p>
+            <p>
+              • 시행일 이전에 발생한 주문 건은 주문 당시 유효했던 정책이
+              적용됩니다.
+            </p>
+            <p>
+              • 정책 변경 시 사전 공지를 원칙으로 하며, 고객에게 불리한 내용은
+              소급 적용되지 않습니다.
+            </p>
+          </div>
+        </section>
+
         {/* Bottom Link */}
         <div className="mt-8">
           <Link
