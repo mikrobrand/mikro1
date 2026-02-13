@@ -62,7 +62,7 @@ export default async function MyPage() {
         {/* Menu list */}
         <div className="flex flex-col">
           <Link
-            href="#"
+            href="/orders"
             className="py-4 border-b border-gray-50 text-[15px] text-gray-800 flex items-center justify-between"
           >
             주문내역
