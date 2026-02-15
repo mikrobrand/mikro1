@@ -30,6 +30,32 @@ export async function GET() {
 
     const items = await prisma.$transaction(async (tx) => {
       // Step 1: Auto-cleanup invalid cart items
+      // Get all cart items to check for orphaned variants
+      const allCartItems = await tx.cartItem.findMany({
+        where: { userId: session.userId },
+        select: { id: true, variantId: true },
+      });
+
+      // Check which variants still exist
+      const variantIds = allCartItems.map((item) => item.variantId);
+      const existingVariants = await tx.productVariant.findMany({
+        where: { id: { in: variantIds } },
+        select: { id: true },
+      });
+
+      const existingVariantIds = new Set(existingVariants.map((v) => v.id));
+      const orphanedCartItemIds = allCartItems
+        .filter((item) => !existingVariantIds.has(item.variantId))
+        .map((item) => item.id);
+
+      // Delete orphaned cart items
+      if (orphanedCartItemIds.length > 0) {
+        await tx.cartItem.deleteMany({
+          where: { id: { in: orphanedCartItemIds } },
+        });
+      }
+
+      // Delete cart items with deleted/inactive products
       await tx.cartItem.deleteMany({
         where: {
           userId: session.userId,

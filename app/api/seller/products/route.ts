@@ -4,6 +4,7 @@ import { Prisma } from "@prisma/client";
 import { requireRole } from "@/lib/auth";
 import { sanitizeDescriptionJson } from "@/lib/descriptionSchema";
 import { validateFlatVariants, formatValidationErrors } from "@/lib/variantValidation";
+import { normalizeVariantInput } from "@/lib/variantNormalize";
 
 export const runtime = "nodejs";
 
@@ -104,12 +105,13 @@ export async function POST(req: NextRequest) {
         });
       }
 
-      // Create variants
+      // Create variants (normalized)
+      const normalizedVariants = variants.map((v) => normalizeVariantInput(v));
       await tx.productVariant.createMany({
-        data: variants.map((v) => ({
+        data: normalizedVariants.map((v) => ({
           productId: p.id,
-          color: (v.color || "FREE").trim().toUpperCase(),
-          sizeLabel: v.sizeLabel.trim().toUpperCase(),
+          color: v.color,
+          sizeLabel: v.sizeLabel,
           stock: v.stock,
         })),
       });
