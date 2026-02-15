@@ -7,20 +7,24 @@ import { formatKrw } from "@/lib/format";
 import WishlistButton from "@/components/WishlistButton";
 import AddToCartSection from "./AddToCartSection";
 import { renderDescriptionForCustomer } from "@/lib/descriptionSchema";
+import { getSession } from "@/lib/auth";
 
 type Props = { params: Promise<{ id: string }> };
 
 export default async function ProductDetailPage({ params }: Props) {
   const { id } = await params;
 
-  const product = await prisma.product.findUnique({
-    where: { id },
-    include: {
-      images: { orderBy: { sortOrder: "asc" } },
-      seller: { include: { sellerProfile: true } },
-      variants: { orderBy: { createdAt: "asc" } },
-    },
-  });
+  const [product, session] = await Promise.all([
+    prisma.product.findUnique({
+      where: { id },
+      include: {
+        images: { orderBy: { sortOrder: "asc" } },
+        seller: { include: { sellerProfile: true } },
+        variants: { orderBy: { createdAt: "asc" } },
+      },
+    }),
+    getSession(),
+  ]);
 
   if (!product || product.isDeleted || !product.isActive) notFound();
 
@@ -76,6 +80,7 @@ export default async function ProductDetailPage({ params }: Props) {
             productId={product.id}
             variants={product.variants}
             isSoldOut={isSoldOut}
+            userRole={session?.role ?? null}
           />
         </div>
 

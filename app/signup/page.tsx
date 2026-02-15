@@ -3,14 +3,16 @@
 import { useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense } from "react";
+import Link from "next/link";
 
-function LoginForm() {
+function SignupForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const next = searchParams.get("next") || "/";
 
-  const [id, setId] = useState("");
-  const [pw, setPw] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [passwordConfirm, setPasswordConfirm] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -18,31 +20,44 @@ function LoginForm() {
     e.preventDefault();
     setError("");
 
-    if (!id.trim() || !pw.trim()) {
-      setError("아이디와 비밀번호를 입력해주세요");
+    if (!email.trim() || !password.trim() || !passwordConfirm.trim()) {
+      setError("모든 필드를 입력해주세요");
+      return;
+    }
+
+    if (password !== passwordConfirm) {
+      setError("비밀번호가 일치하지 않습니다");
+      return;
+    }
+
+    if (password.length < 6) {
+      setError("비밀번호는 최소 6자 이상이어야 합니다");
       return;
     }
 
     setLoading(true);
 
     try {
-      const res = await fetch("/api/auth/login", {
+      const res = await fetch("/api/auth/signup", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: id.trim(), pw: pw.trim() }),
+        body: JSON.stringify({
+          email: email.trim(),
+          password: password.trim(),
+        }),
       });
 
       const data = await res.json();
 
       if (!res.ok || !data.ok) {
-        setError(data.message || "로그인에 실패했습니다");
+        setError(data.error || "회원가입에 실패했습니다");
         setLoading(false);
         return;
       }
 
-      // Redirect to `next` or home
+      // 자동 로그인 완료, 리다이렉트
       router.push(next);
-      router.refresh(); // reload server components to pick up new cookie
+      router.refresh();
     } catch {
       setError("네트워크 오류가 발생했습니다");
       setLoading(false);
@@ -53,18 +68,21 @@ function LoginForm() {
     <div className="min-h-[calc(100vh-104px)] flex items-center justify-center px-5">
       <div className="w-full max-w-[340px]">
         {/* Logo */}
-        <h1 className="text-center text-[28px] font-extrabold tracking-tight mb-8">
+        <h1 className="text-center text-[28px] font-extrabold tracking-tight mb-2">
           mikro
         </h1>
+        <p className="text-center text-[14px] text-gray-500 mb-8">
+          회원가입
+        </p>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <input
-              type="text"
-              value={id}
-              onChange={(e) => setId(e.target.value)}
-              placeholder="아이디"
-              autoComplete="username"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="이메일"
+              autoComplete="email"
               className="w-full h-12 px-4 rounded-xl border border-gray-200 text-[15px] placeholder:text-gray-400 focus:outline-none focus:border-black transition-colors"
               disabled={loading}
             />
@@ -73,10 +91,22 @@ function LoginForm() {
           <div>
             <input
               type="password"
-              value={pw}
-              onChange={(e) => setPw(e.target.value)}
-              placeholder="비밀번호"
-              autoComplete="current-password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="비밀번호 (최소 6자)"
+              autoComplete="new-password"
+              className="w-full h-12 px-4 rounded-xl border border-gray-200 text-[15px] placeholder:text-gray-400 focus:outline-none focus:border-black transition-colors"
+              disabled={loading}
+            />
+          </div>
+
+          <div>
+            <input
+              type="password"
+              value={passwordConfirm}
+              onChange={(e) => setPasswordConfirm(e.target.value)}
+              placeholder="비밀번호 확인"
+              autoComplete="new-password"
               className="w-full h-12 px-4 rounded-xl border border-gray-200 text-[15px] placeholder:text-gray-400 focus:outline-none focus:border-black transition-colors"
               disabled={loading}
             />
@@ -91,57 +121,28 @@ function LoginForm() {
             disabled={loading}
             className="w-full h-12 bg-black text-white rounded-xl text-[16px] font-bold active:bg-gray-800 transition-colors disabled:opacity-50"
           >
-            {loading ? "로그인 중..." : "로그인"}
+            {loading ? "가입 중..." : "회원가입"}
           </button>
         </form>
 
-        {/* Signup link */}
-        <div className="mt-4 text-center">
+        {/* Login link */}
+        <div className="mt-6 text-center">
           <p className="text-[14px] text-gray-600">
-            계정이 없으신가요?{" "}
-            <a
-              href="/signup"
+            이미 계정이 있으신가요?{" "}
+            <Link
+              href="/login"
               className="text-black font-medium underline"
             >
-              회원가입
-            </a>
+              로그인
+            </Link>
           </p>
-        </div>
-
-        {/* Hint */}
-        <div className="mt-8 p-4 bg-gray-50 rounded-xl">
-          <p className="text-[12px] text-gray-500 text-center mb-2">
-            MVP 테스트 계정
-          </p>
-          <div className="flex gap-3 justify-center">
-            <button
-              type="button"
-              onClick={() => {
-                setId("1");
-                setPw("1");
-              }}
-              className="px-3 py-1.5 rounded-lg bg-white border border-gray-200 text-[12px] text-gray-700 active:bg-gray-100 transition-colors"
-            >
-              👤 고객 (1/1)
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setId("s");
-                setPw("s");
-              }}
-              className="px-3 py-1.5 rounded-lg bg-white border border-gray-200 text-[12px] text-gray-700 active:bg-gray-100 transition-colors"
-            >
-              🏪 판매자 (s/s)
-            </button>
-          </div>
         </div>
       </div>
     </div>
   );
 }
 
-export default function LoginPage() {
+export default function SignupPage() {
   return (
     <Suspense
       fallback={
@@ -150,7 +151,7 @@ export default function LoginPage() {
         </div>
       }
     >
-      <LoginForm />
+      <SignupForm />
     </Suspense>
   );
 }

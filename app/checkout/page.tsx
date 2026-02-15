@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import Container from "@/components/Container";
 import { formatKrw } from "@/lib/format";
+import AddressForm from "@/components/AddressForm";
 
 interface Address {
   id: string;
@@ -67,6 +68,8 @@ export default function CheckoutPage() {
   const [processingPayment, setProcessingPayment] = useState(false);
   const [orderIds, setOrderIds] = useState<string[]>([]);
   const [isDirectMode, setIsDirectMode] = useState(false);
+  const [showAddressForm, setShowAddressForm] = useState(false);
+  const [showAddressSelector, setShowAddressSelector] = useState(false);
 
   useEffect(() => {
     if (directOrderId) {
@@ -258,6 +261,35 @@ export default function CheckoutPage() {
     }
   };
 
+  const reloadAddresses = async () => {
+    try {
+      const addressRes = await fetch("/api/addresses");
+      if (!addressRes.ok) {
+        if (addressRes.status === 401) {
+          router.push("/login");
+          return;
+        }
+        throw new Error("Failed to load addresses");
+      }
+
+      const addressesData = await addressRes.json();
+      setAddresses(addressesData);
+
+      // If no address was selected or previous selected doesn't exist, select default
+      if (!selectedAddress || !addressesData.find((a: Address) => a.id === selectedAddress.id)) {
+        const defaultAddr = addressesData.find((a: Address) => a.isDefault);
+        setSelectedAddress(defaultAddr || addressesData[0] || null);
+      }
+    } catch (err: any) {
+      setError(err.message || "배송지를 불러오는데 실패했습니다");
+    }
+  };
+
+  const handleAddressSaved = async () => {
+    setShowAddressForm(false);
+    await reloadAddresses();
+  };
+
   const handleCreateOrders = async () => {
     // In direct mode, order already exists
     if (isDirectMode) {
@@ -427,13 +459,23 @@ export default function CheckoutPage() {
                 ({selectedAddress.zipCode}) {selectedAddress.addr1}{" "}
                 {selectedAddress.addr2}
               </p>
-              <button
-                type="button"
-                className="mt-3 text-[14px] text-blue-600 font-medium"
-                onClick={() => alert("배송지 변경 기능은 준비 중입니다")}
-              >
-                배송지 변경
-              </button>
+              <div className="mt-3 flex gap-2">
+                <button
+                  type="button"
+                  className="text-[14px] text-blue-600 font-medium"
+                  onClick={() => setShowAddressSelector(true)}
+                >
+                  배송지 변경
+                </button>
+                <span className="text-gray-300">|</span>
+                <button
+                  type="button"
+                  className="text-[14px] text-blue-600 font-medium"
+                  onClick={() => setShowAddressForm(true)}
+                >
+                  새 배송지 추가
+                </button>
+              </div>
             </div>
           ) : (
             <div className="p-4 bg-gray-50 rounded-xl border border-gray-200 text-center">
@@ -442,10 +484,10 @@ export default function CheckoutPage() {
               </p>
               <button
                 type="button"
-                className="px-4 py-2 bg-black text-white rounded-lg text-[14px] font-bold"
-                onClick={() => alert("배송지 추가 기능은 준비 중입니다")}
+                className="px-4 py-2 bg-black text-white rounded-lg text-[14px] font-bold active:bg-gray-800 transition-colors"
+                onClick={() => setShowAddressForm(true)}
               >
-                배송지 추가
+                새 배송지 추가
               </button>
             </div>
           )}
@@ -628,6 +670,80 @@ export default function CheckoutPage() {
                   className="w-full h-[48px] bg-gray-200 text-gray-700 rounded-xl text-[16px] font-bold disabled:bg-gray-100"
                 >
                   취소
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Address Form Modal */}
+        {showAddressForm && (
+          <AddressForm
+            onSaved={handleAddressSaved}
+            onCancel={() => setShowAddressForm(false)}
+          />
+        )}
+
+        {/* Address Selector Modal */}
+        {showAddressSelector && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-2xl p-6 max-w-md w-full max-h-[80vh] overflow-y-auto">
+              <h2 className="text-[20px] font-bold text-black mb-4">배송지 선택</h2>
+
+              <div className="space-y-3">
+                {addresses.map((addr) => (
+                  <button
+                    key={addr.id}
+                    type="button"
+                    onClick={() => {
+                      setSelectedAddress(addr);
+                      setShowAddressSelector(false);
+                    }}
+                    className={`w-full p-4 rounded-xl border-2 text-left transition-colors ${
+                      selectedAddress?.id === addr.id
+                        ? "border-black bg-gray-50"
+                        : "border-gray-200 hover:border-gray-300"
+                    }`}
+                  >
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <p className="text-[16px] font-bold text-black">
+                          {addr.name}
+                        </p>
+                        <p className="text-[14px] text-gray-600 mt-1">
+                          {addr.phone}
+                        </p>
+                        <p className="text-[14px] text-gray-600">
+                          ({addr.zipCode}) {addr.addr1} {addr.addr2}
+                        </p>
+                      </div>
+                      {addr.isDefault && (
+                        <span className="ml-2 px-2 py-1 bg-black text-white text-[11px] font-bold rounded">
+                          기본
+                        </span>
+                      )}
+                    </div>
+                  </button>
+                ))}
+              </div>
+
+              <div className="mt-4 flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowAddressSelector(false);
+                    setShowAddressForm(true);
+                  }}
+                  className="flex-1 h-12 bg-gray-200 text-gray-700 rounded-xl text-[14px] font-bold active:bg-gray-300 transition-colors"
+                >
+                  새 배송지 추가
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowAddressSelector(false)}
+                  className="flex-1 h-12 bg-black text-white rounded-xl text-[14px] font-bold active:bg-gray-800 transition-colors"
+                >
+                  닫기
                 </button>
               </div>
             </div>

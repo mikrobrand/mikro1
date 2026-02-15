@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Geist } from "next/font/google";
 import TopBar from "@/components/TopBar";
 import BottomTab from "@/components/BottomTab";
+import ConditionalFooter from "@/components/ConditionalFooter";
 import { SessionProvider } from "@/components/SessionProvider";
 import { getSession } from "@/lib/auth";
 import "./globals.css";
@@ -41,6 +42,7 @@ export default async function RootLayout({
             {children}
           </main>
           <BottomTab />
+          <ConditionalFooter />
         </SessionProvider>
       </body>
     </html>

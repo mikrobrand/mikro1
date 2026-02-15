@@ -14,12 +14,14 @@ interface Props {
   productId: string;
   variants: Variant[];
   isSoldOut: boolean;
+  userRole: "CUSTOMER" | "SELLER" | null;
 }
 
 export default function AddToCartSection({
   productId,
   variants,
   isSoldOut,
+  userRole,
 }: Props) {
   const router = useRouter();
   const [selectedVariantId, setSelectedVariantId] = useState<string | null>(
@@ -42,6 +44,24 @@ export default function AddToCartSection({
 
     if (quantity > selectedVariant.stock) {
       setMessage(`재고가 부족합니다 (최대 ${selectedVariant.stock}개)`);
+      setTimeout(() => setMessage(null), 2000);
+      return;
+    }
+
+    // Check authentication before API call
+    if (!userRole) {
+      // Not logged in - show message and redirect
+      setMessage("로그인이 필요합니다");
+      setTimeout(() => {
+        const currentPath = window.location.pathname;
+        router.push(`/login?next=${encodeURIComponent(currentPath)}`);
+      }, 1000);
+      return;
+    }
+
+    if (userRole === "SELLER") {
+      // Seller cannot purchase
+      setMessage("구매는 고객 계정만 가능합니다");
       setTimeout(() => setMessage(null), 2000);
       return;
     }
@@ -95,6 +115,24 @@ export default function AddToCartSection({
 
     if (quantity > selectedVariant.stock) {
       setMessage(`재고가 부족합니다 (최대 ${selectedVariant.stock}개)`);
+      setTimeout(() => setMessage(null), 2000);
+      return;
+    }
+
+    // Check authentication before API call
+    if (!userRole) {
+      // Not logged in - show message and redirect
+      setMessage("로그인이 필요합니다");
+      setTimeout(() => {
+        const currentPath = window.location.pathname;
+        router.push(`/login?next=${encodeURIComponent(currentPath)}`);
+      }, 1000);
+      return;
+    }
+
+    if (userRole === "SELLER") {
+      // Seller cannot purchase
+      setMessage("구매는 고객 계정만 가능합니다");
       setTimeout(() => setMessage(null), 2000);
       return;
     }
