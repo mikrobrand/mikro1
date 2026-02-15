@@ -149,7 +149,7 @@ export default function CheckoutPage() {
 
       setSellerGroups([group]);
       setOrderIds([orderId]); // Already have order ID
-      setShowPaymentModal(true); // Go directly to payment modal
+      // Don't auto-open payment modal - let user select address first
     } catch (err: any) {
       setError(err.message || "주문 정보를 불러오는데 실패했습니다");
     } finally {
@@ -624,16 +624,14 @@ export default function CheckoutPage() {
         </div>
 
         {/* Payment button */}
-        {!isDirectMode && (
-          <button
-            type="button"
-            onClick={handleCreateOrders}
-            disabled={processingPayment || !selectedAddress}
-            className="w-full h-[56px] bg-black text-white rounded-xl text-[18px] font-bold disabled:bg-gray-300 disabled:cursor-not-allowed"
-          >
-            {processingPayment ? "처리 중..." : "결제하기 (테스트)"}
-          </button>
-        )}
+        <button
+          type="button"
+          onClick={handleCreateOrders}
+          disabled={processingPayment || !selectedAddress}
+          className="w-full h-[56px] bg-black text-white rounded-xl text-[18px] font-bold disabled:bg-gray-300 disabled:cursor-not-allowed"
+        >
+          {processingPayment ? "처리 중..." : "결제하기 (테스트)"}
+        </button>
 
         {/* Payment Modal */}
         {showPaymentModal && (
