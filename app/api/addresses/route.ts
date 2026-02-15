@@ -15,20 +15,14 @@ interface CreateAddressRequest {
 
 /**
  * GET /api/addresses
- * Get all addresses for current user (CUSTOMER only)
+ * Get all addresses for current user (all authenticated users)
+ * Phase 2: Sellers can also purchase, so they can manage addresses
  */
 export async function GET() {
   try {
     const session = await getSession();
     if (!session) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    if (canAccessSellerFeatures(session.role)) {
-      return NextResponse.json(
-        { error: "Sellers cannot manage addresses" },
-        { status: 403 }
-      );
     }
 
     const addresses = await prisma.address.findMany({
@@ -48,20 +42,14 @@ export async function GET() {
 
 /**
  * POST /api/addresses
- * Create new address (CUSTOMER only)
+ * Create new address (all authenticated users)
+ * Phase 2: Sellers can also purchase, so they can manage addresses
  */
 export async function POST(request: Request) {
   try {
     const session = await getSession();
     if (!session) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    if (canAccessSellerFeatures(session.role)) {
-      return NextResponse.json(
-        { error: "Sellers cannot manage addresses" },
-        { status: 403 }
-      );
     }
 
     const body = (await request.json()) as CreateAddressRequest;

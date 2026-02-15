@@ -17,20 +17,14 @@ interface UpdateAddressRequest {
 
 /**
  * PATCH /api/addresses/[id]
- * Update address (CUSTOMER only, must own the address)
+ * Update address (all authenticated users, must own the address)
+ * Phase 2: Sellers can also purchase, so they can manage addresses
  */
 export async function PATCH(request: Request, { params }: Props) {
   try {
     const session = await getSession();
     if (!session) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    if (canAccessSellerFeatures(session.role)) {
-      return NextResponse.json(
-        { error: "Sellers cannot manage addresses" },
-        { status: 403 }
-      );
     }
 
     const { id } = await params;
@@ -87,20 +81,14 @@ export async function PATCH(request: Request, { params }: Props) {
 
 /**
  * DELETE /api/addresses/[id]
- * Delete address (CUSTOMER only, must own the address)
+ * Delete address (all authenticated users, must own the address)
+ * Phase 2: Sellers can also purchase, so they can manage addresses
  */
 export async function DELETE(request: Request, { params }: Props) {
   try {
     const session = await getSession();
     if (!session) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    if (canAccessSellerFeatures(session.role)) {
-      return NextResponse.json(
-        { error: "Sellers cannot manage addresses" },
-        { status: 403 }
-      );
     }
 
     const { id } = await params;
