@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { getLoginRedirectUrl } from "@/lib/authHelpers";
 
 interface Variant {
   id: string;
@@ -53,8 +54,7 @@ export default function AddToCartSection({
       // Not logged in - show message and redirect
       setMessage("로그인이 필요합니다");
       setTimeout(() => {
-        const currentPath = window.location.pathname;
-        router.push(`/login?next=${encodeURIComponent(currentPath)}`);
+        router.push(getLoginRedirectUrl());
       }, 1000);
       return;
     }
@@ -79,8 +79,7 @@ export default function AddToCartSection({
 
       if (res.status === 401) {
         // Not logged in - redirect to login with return URL
-        const currentPath = window.location.pathname;
-        router.push(`/login?next=${encodeURIComponent(currentPath)}`);
+        router.push(getLoginRedirectUrl());
         return;
       }
 
@@ -124,8 +123,7 @@ export default function AddToCartSection({
       // Not logged in - show message and redirect
       setMessage("로그인이 필요합니다");
       setTimeout(() => {
-        const currentPath = window.location.pathname;
-        router.push(`/login?next=${encodeURIComponent(currentPath)}`);
+        router.push(getLoginRedirectUrl());
       }, 1000);
       return;
     }
@@ -150,8 +148,7 @@ export default function AddToCartSection({
 
       if (res.status === 401) {
         // Not logged in - redirect to login with return URL
-        const currentPath = window.location.pathname;
-        router.push(`/login?next=${encodeURIComponent(currentPath)}`);
+        router.push(getLoginRedirectUrl());
         return;
       }
 

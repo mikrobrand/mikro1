@@ -24,17 +24,44 @@ export default function AddressForm({ onSaved, onCancel }: Props) {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [scriptLoaded, setScriptLoaded] = useState(false);
+  const [scriptError, setScriptError] = useState(false);
 
-  useEffect(() => {
-    // Load Daum Postcode script
+  const loadPostcodeScript = () => {
+    setScriptError(false);
+    setScriptLoaded(false);
+
+    // Check if script already exists
+    const existingScript = document.querySelector(
+      'script[src*="postcode.v2.js"]'
+    );
+    if (existingScript) {
+      existingScript.remove();
+    }
+
     const script = document.createElement("script");
     script.src = "https://t1.daumcdn.net/mapjsapi/bundle/postcode/prod/postcode.v2.js";
     script.async = true;
-    script.onload = () => setScriptLoaded(true);
+    script.onload = () => {
+      setScriptLoaded(true);
+      setScriptError(false);
+    };
+    script.onerror = () => {
+      setScriptError(true);
+      setScriptLoaded(false);
+    };
     document.body.appendChild(script);
+  };
+
+  useEffect(() => {
+    loadPostcodeScript();
 
     return () => {
-      document.body.removeChild(script);
+      const script = document.querySelector(
+        'script[src*="postcode.v2.js"]'
+      );
+      if (script) {
+        script.remove();
+      }
     };
   }, []);
 
@@ -122,17 +149,33 @@ export default function AddressForm({ onSaved, onCancel }: Props) {
             <button
               type="button"
               onClick={handleSearchAddress}
-              disabled={loading || !scriptLoaded}
+              disabled={loading || (!scriptLoaded && !scriptError)}
               className="w-full h-12 px-4 rounded-xl border border-gray-200 text-left text-[15px] bg-gray-50 hover:bg-gray-100 active:bg-gray-200 transition-colors disabled:bg-gray-100 disabled:cursor-not-allowed"
             >
               {zipCode && addr1 ? (
                 <span className="text-black">
                   ({zipCode}) {addr1}
                 </span>
+              ) : !scriptLoaded && !scriptError ? (
+                <span className="text-gray-400">주소 검색 준비 중...</span>
               ) : (
                 <span className="text-gray-400">주소 검색</span>
               )}
             </button>
+            {scriptError && (
+              <div className="mt-2 p-3 bg-red-50 rounded-lg">
+                <p className="text-[13px] text-red-600 mb-2">
+                  주소 검색 서비스를 불러오지 못했습니다
+                </p>
+                <button
+                  type="button"
+                  onClick={loadPostcodeScript}
+                  className="text-[13px] text-red-600 font-medium underline"
+                >
+                  다시 시도
+                </button>
+              </div>
+            )}
           </div>
 
           {/* Detailed address (manual input) */}
