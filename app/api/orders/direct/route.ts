@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getSession } from "@/lib/auth";
+import { getSession, canAccessSellerFeatures } from "@/lib/auth";
+import { OrderStatus } from "@prisma/client";
 
 export const runtime = "nodejs";
 
@@ -13,10 +14,11 @@ interface DirectOrderRequest {
  * POST /api/orders/direct
  *
  * Create order directly from product detail page (바로구매 flow).
+ * Phase 2: All authenticated users (including sellers) can purchase
  * Does NOT deduct stock - stock deduction happens during payment confirmation.
  *
  * Flow:
- * 1. Authenticate CUSTOMER
+ * 1. Authenticate user
  * 2. Validate variant and product
  * 3. Calculate pricing server-side
  * 4. Create order + orderItem in transaction
@@ -28,13 +30,6 @@ export async function POST(request: NextRequest) {
     const session = await getSession();
     if (!session) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    if (session.role === "SELLER") {
-      return NextResponse.json(
-        { error: "Sellers cannot create orders" },
-        { status: 403 }
-      );
     }
 
     // Parse request
@@ -134,7 +129,7 @@ export async function POST(request: NextRequest) {
           orderNo,
           buyerId: session.userId,
           sellerId: product.sellerId,
-          status: "PENDING",
+          status: OrderStatus.PENDING,
           totalAmountKrw: itemsSubtotalKrw, // Legacy field
           itemsSubtotalKrw,
           shippingFeeKrw,

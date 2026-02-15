@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getSession } from "@/lib/auth";
+import { getSession, canAccessSellerFeatures } from "@/lib/auth";
+import { OrderStatus } from "@prisma/client";
 
 export const runtime = "nodejs";
 
@@ -11,6 +12,7 @@ interface SimulatePaymentRequest {
 /**
  * POST /api/payments/simulate
  * Simulate payment success with atomic stock deduction
+ * Phase 2: All authenticated users (including sellers) can purchase
  *
  * CRITICAL: This performs atomic stock deduction using updateMany with
  * WHERE stock >= quantity to prevent race conditions and overselling
@@ -20,13 +22,6 @@ export async function POST(request: Request) {
     const session = await getSession();
     if (!session) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    if (session.role === "SELLER") {
-      return NextResponse.json(
-        { error: "Sellers cannot simulate payment" },
-        { status: 403 }
-      );
     }
 
     const body = (await request.json()) as SimulatePaymentRequest;
@@ -68,11 +63,11 @@ export async function POST(request: Request) {
           throw new Error(`Forbidden: Order ${orderId} does not belong to you`);
         }
 
-        if (order.status === "PAID") {
+        if (order.status === OrderStatus.PAID) {
           return { ok: true, alreadyPaid: true };
         }
 
-        if (order.status !== "PENDING") {
+        if (order.status !== OrderStatus.PENDING) {
           throw new Error(`Order ${orderId} is not in PENDING status`);
         }
 
@@ -80,7 +75,7 @@ export async function POST(request: Request) {
         if (order.expiresAt && new Date() > order.expiresAt) {
           await tx.order.update({
             where: { id: order.id },
-            data: { status: "CANCELLED" },
+            data: { status: OrderStatus.CANCELLED },
           });
           throw new Error("ORDER_EXPIRED");
         }
@@ -117,7 +112,7 @@ export async function POST(request: Request) {
         await tx.order.update({
           where: { id: order.id },
           data: {
-            status: "PAID",
+            status: OrderStatus.PAID,
             expiresAt: null, // Clear expiration for paid orders
           },
         });
@@ -142,6 +137,12 @@ export async function POST(request: Request) {
           });
         }
       }
+
+      // TRACK 3: Clear cart after successful payment
+      // This ensures cart is cleaned up atomically with payment confirmation
+      await tx.cartItem.deleteMany({
+        where: { userId: session.userId },
+      });
 
       return { ok: true, alreadyPaid: false };
     });

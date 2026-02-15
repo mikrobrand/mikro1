@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getSession } from "@/lib/auth";
+import { getSession, canAccessSellerFeatures } from "@/lib/auth";
 import { generateOrderNo } from "@/lib/order-utils";
+import { OrderStatus } from "@prisma/client";
 
 export const runtime = "nodejs";
 
@@ -28,21 +29,14 @@ interface CreateOrderRequest {
 /**
  * POST /api/orders
  * 장바구니 기반 주문 생성 (재고 검증만, 재고 차감은 결제 확정 시)
+ * Phase 2: All authenticated users (including sellers) can create orders
  */
 export async function POST(request: Request) {
   try {
-    // 1) CUSTOMER 인증 필수
+    // 1) Authentication required
     const session = await getSession();
     if (!session) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    // SELLER는 주문 생성 불가
-    if (session.role === "SELLER") {
-      return NextResponse.json(
-        { error: "Sellers cannot create orders" },
-        { status: 403 }
-      );
     }
 
     const body = (await request.json()) as CreateOrderRequest;
@@ -157,7 +151,7 @@ export async function POST(request: Request) {
             orderNo: generateOrderNo(),
             buyerId: session.userId,
             sellerId,
-            status: "PENDING",
+            status: OrderStatus.PENDING,
             totalAmountKrw,
             itemsSubtotalKrw: totalAmountKrw,
             shippingFeeKrw: calculatedShippingFee,

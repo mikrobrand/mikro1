@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getSession } from "@/lib/auth";
+import { getSession, canAccessSellerFeatures } from "@/lib/auth";
+import { OrderStatus, PaymentStatus } from "@prisma/client";
 
 export const runtime = "nodejs";
 
@@ -11,6 +12,7 @@ interface SimulatePaymentFailRequest {
 /**
  * POST /api/payments/simulate-fail
  * Simulate payment failure
+ * Phase 2: All authenticated users (including sellers) can purchase
  *
  * Sets Payment.status = FAILED but keeps Order.status = PENDING
  * to allow retry. Does NOT deduct stock.
@@ -21,13 +23,6 @@ export async function POST(request: Request) {
     const session = await getSession();
     if (!session) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    if (session.role === "SELLER") {
-      return NextResponse.json(
-        { error: "Sellers cannot simulate payment" },
-        { status: 403 }
-      );
     }
 
     const body = (await request.json()) as SimulatePaymentFailRequest;
@@ -56,7 +51,7 @@ export async function POST(request: Request) {
           throw new Error(`Forbidden: Order ${orderId} does not belong to you`);
         }
 
-        if (order.status !== "PENDING") {
+        if (order.status !== OrderStatus.PENDING) {
           continue;
         }
 
@@ -64,14 +59,14 @@ export async function POST(request: Request) {
           await tx.payment.update({
             where: { id: order.payment.id },
             data: {
-              status: "FAILED",
+              status: PaymentStatus.FAILED,
             },
           });
         } else {
           await tx.payment.create({
             data: {
               orderId: order.id,
-              status: "FAILED",
+              status: PaymentStatus.FAILED,
               amountKrw: order.totalPayKrw || order.totalAmountKrw,
               method: "TEST_SIMULATION",
             },

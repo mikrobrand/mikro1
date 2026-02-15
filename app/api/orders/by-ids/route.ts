@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getSession } from "@/lib/auth";
+import { getSession, canAccessSellerFeatures } from "@/lib/auth";
 
 export const runtime = "nodejs";
 
@@ -11,19 +11,13 @@ interface GetOrdersByIdsRequest {
 /**
  * POST /api/orders/by-ids
  * Fetch multiple orders by IDs (ownership verified)
+ * Phase 2: All authenticated users (including sellers) can access their buyer orders
  */
 export async function POST(request: Request) {
   try {
     const session = await getSession();
     if (!session) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    if (session.role === "SELLER") {
-      return NextResponse.json(
-        { error: "Sellers cannot access buyer orders via this endpoint" },
-        { status: 403 }
-      );
     }
 
     const body = (await request.json()) as GetOrdersByIdsRequest;
