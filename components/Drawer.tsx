@@ -4,6 +4,7 @@ import { useEffect, useRef } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useSession } from "@/components/SessionProvider";
+import LogoutButton from "@/components/LogoutButton";
 
 type DrawerProps = {
   open: boolean;
@@ -114,7 +115,7 @@ export default function Drawer({ open, onClose }: DrawerProps) {
         </div>
 
         {/* Content */}
-        <nav className="overflow-y-auto h-[calc(100%-52px)] px-5 pb-10">
+        <nav className="overflow-y-auto h-[calc(100%-52px)] px-5 pb-10 flex flex-col">
           {/* Login status */}
           <div className="mt-4 mb-2 px-1">
             {session ? (
@@ -124,31 +125,50 @@ export default function Drawer({ open, onClose }: DrawerProps) {
                 </span>
               </div>
             ) : (
-              <Link
-                href="/login"
-                className="text-[13px] font-medium text-black underline"
-              >
-                로그인
-              </Link>
+              <div className="flex items-center gap-3">
+                <Link
+                  href="/login"
+                  className="text-[13px] font-medium text-black underline"
+                >
+                  로그인
+                </Link>
+                <span className="text-gray-300">|</span>
+                <Link
+                  href="/signup"
+                  className="text-[13px] font-medium text-black underline"
+                >
+                  회원가입
+                </Link>
+              </div>
             )}
           </div>
 
-          {visibleSections.map((section) => (
-            <div key={section.title}>
-              <h3 className="text-xs uppercase text-gray-400 mt-6 mb-2 tracking-wide">
-                {section.title}
-              </h3>
-              {section.links.map((link) => (
-                <Link
-                  key={link.href}
-                  href={link.href}
-                  className="block py-3 border-b border-gray-50 text-base text-gray-800 active:text-black transition-colors"
-                >
-                  {link.label}
-                </Link>
-              ))}
+          {/* Menu sections */}
+          <div className="flex-1">
+            {visibleSections.map((section) => (
+              <div key={section.title}>
+                <h3 className="text-xs uppercase text-gray-400 mt-6 mb-2 tracking-wide">
+                  {section.title}
+                </h3>
+                {section.links.map((link) => (
+                  <Link
+                    key={link.href}
+                    href={link.href}
+                    className="block py-3 border-b border-gray-50 text-base text-gray-800 active:text-black transition-colors"
+                  >
+                    {link.label}
+                  </Link>
+                ))}
+              </div>
+            ))}
+          </div>
+
+          {/* Logout button at bottom - logged in users only */}
+          {session && (
+            <div className="mt-6 pt-6 border-t border-gray-100">
+              <LogoutButton variant="drawer" />
             </div>
-          ))}
+          )}
         </nav>
       </aside>
     </>
